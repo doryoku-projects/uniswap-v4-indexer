@@ -1,7 +1,6 @@
 type Swap
   @storage(postgres: true, clickhouse: true)
-  @index(fields: ["timestamp", "pool"])
-  @index(fields: ["amountUSD", "pool"]) {
+  @index(fields: ["pool", ["timestamp", "DESC"]]) {
   id: ID!
   chainId: BigInt!
   transaction: String! # Instead of Transaction reference
@@ -43,11 +42,14 @@ type PoolManager @storage(postgres: true, clickhouse: true) {
   hookedSwaps: BigInt! # number of swaps through hooked pools
 }
 
-type Pool @storage(postgres: true, clickhouse: true) {
+type Pool
+  @storage(postgres: true, clickhouse: true)
+  @index(fields: ["chainId", ["totalValueLockedUSD", "DESC"]])
+  @index(fields: ["hooks", "chainId", ["totalValueLockedUSD", "DESC"]]) {
   id: ID!
   chainId: BigInt!
   name: String!
-  createdAtTimestamp: BigInt!
+  createdAtTimestamp: BigInt! @index
   createdAtBlockNumber: BigInt!
   token0: String! # Instead of Token reference
   token1: String! # Instead of Token reference
@@ -80,11 +82,13 @@ type Pool @storage(postgres: true, clickhouse: true) {
   ticks: [Tick!]! @derivedFrom(field: "pool")
 }
 
-type Tick @storage(postgres: true, clickhouse: true) {
+type Tick
+  @storage(postgres: true, clickhouse: true)
+  @index(fields: ["pool", "tickIdx"]) {
   id: ID! # <pool address>#<tickIdx>
   chainId: BigInt!
   pool: Pool! # Pointer back to Pool
-  tickIdx: BigInt! @index
+  tickIdx: BigInt!
   liquidityGross: BigInt! # abs liquidity at this boundary
   liquidityNet: BigInt! # delta when price crosses boundary
   price0: BigDecimal! # Optional – 1.0001^tickIdx
@@ -95,7 +99,7 @@ type Tick @storage(postgres: true, clickhouse: true) {
 
 type Token @storage(postgres: true, clickhouse: true) {
   id: ID!
-  chainId: BigInt!
+  chainId: BigInt! @index
   symbol: String!
   name: String!
   decimals: BigInt!
@@ -126,7 +130,7 @@ type HookStats @storage(postgres: true, clickhouse: true) {
   numberOfPools: BigInt!
   numberOfSwaps: BigInt!
   firstPoolCreatedAt: BigInt!
-  totalValueLockedUSD: BigDecimal! # Total TVL across all pools using this hook
+  totalValueLockedUSD: BigDecimal! @index # Total TVL across all pools using this hook
   totalVolumeUSD: BigDecimal! # Total volume across all pools using this hook
   untrackedVolumeUSD: BigDecimal! # Untracked volume for non-whitelisted tokens
   totalFeesUSD: BigDecimal! # Total fees across all pools using this hook
@@ -184,8 +188,8 @@ type Unsubscribe @storage(postgres: true, clickhouse: true) {
 
 type ModifyLiquidity
   @storage(postgres: true, clickhouse: true)
-  @index(fields: ["timestamp", "pool"])
-  @index(fields: ["amountUSD", "pool"]) {
+  @index(fields: ["pool", ["timestamp", "DESC"]])
+  @index(fields: ["pool", "transaction"]) {
   id: ID!
   chainId: BigInt!
   transaction: String! # Instead of Transaction reference
