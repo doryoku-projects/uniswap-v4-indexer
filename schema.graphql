@@ -1,7 +1,7 @@
 type Swap
   @storage(postgres: true, clickhouse: true)
-  @index(fields: ["timestamp", "pool"])
-  @index(fields: ["amountUSD", "pool"]) {
+  @index(fields: ["pool", ["timestamp", "DESC"]])
+  @index(fields: ["pool", ["amountUSD", "DESC"]]) {
   id: ID!
   chainId: BigInt!
   transaction: String! # Instead of Transaction reference
@@ -184,8 +184,8 @@ type Unsubscribe @storage(postgres: true, clickhouse: true) {
 
 type ModifyLiquidity
   @storage(postgres: true, clickhouse: true)
-  @index(fields: ["timestamp", "pool"])
-  @index(fields: ["amountUSD", "pool"]) {
+  @index(fields: ["pool", ["timestamp", "DESC"]])
+  @index(fields: ["pool", ["amountUSD", "DESC"]]) {
   id: ID!
   chainId: BigInt!
   transaction: String! # Instead of Transaction reference
