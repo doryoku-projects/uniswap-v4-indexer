@@ -26,6 +26,7 @@ Ethereum, Optimism, Base, Arbitrum, Polygon, Blast, Zora, Avalanche, BNB Chain, 
 
 The GraphQL API exposes pool statistics, swap history, liquidity positions, and ERC-6909 token data across all supported chains. You can use this to power analytics dashboards, trading interfaces, liquidity trackers, hook monitors, and cross-chain Uniswap V4 data aggregations.
 
+
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/en/download/current) v24 or newer
