@@ -45,55 +45,84 @@ pnpm envio dev
 
 The Hasura console is available at [http://localhost:8080](http://localhost:8080) where you can explore and query indexed data using GraphQL.
 
-## Serving the subgraph dialect (`proxy/`)
+## Serving the subgraph dialect (`src/graph-api/`)
 
-Envio answers GraphQL through Hasura, whose dialect does not match The Graph's:
-`Pool` not `pools`, `where: { volumeUSD: { _gt: "0" } }` not
-`where: { volumeUSD_gt: "0" }`, `order_by`/`limit`/`offset` not
-`orderBy`/`orderDirection`/`first`/`skip`. None of that is configurable — the
-root field name is fixed to the entity name in Envio's Hasura setup, and the
-argument grammar is Hasura's own.
+This indexer answers **The Graph's query dialect** directly, so a consumer
+written against a Uniswap v4 subgraph can point at it without changing a single
+query — useful on chains where The Graph publishes no subgraph service at all.
 
-`proxy/` is a small service that translates between the two, one process per
-chain, so a consumer written against a Uniswap v4 subgraph can point at this
-indexer without changing a single query:
-
-```
-consumer ──(subgraph dialect)──► proxy ──(Hasura dialect)──► this indexer
-```
-
-It also reverses the `<chainId>_` id prefix this indexer adds, and stitches
-`Pool.token0`/`token1` — stored here as `String` columns rather than relations —
-back into the nested `token0 { id symbol decimals }` shape a subgraph returns.
-
-Run both with one command:
+The server runs **inside the indexer process**. envio auto-imports every
+`src/handlers/**/*.ts` (`HandlerLoader.res.mjs:41`), so `src/handlers/graph-api.ts`
+starts an HTTP server on import and reads Postgres directly. No Hasura, no
+sidecar, no second process.
 
 ```bash
-PROXY_CHAIN_ID=1 ENVIO_CONFIG=config.ethereum.yaml pnpm dev:all
+ENVIO_HASURA=false GRAPH_API_CHAIN_ID=1 pnpm envio dev --config config.ethereum.yaml
 ```
 
-`dev:all` supervises the indexer and the proxy together, prefixes their output,
-and stops the stack if either dies. It derives `ENVIO_PG_SCHEMA` and
-`ENVIO_CLICKHOUSE_DATABASE` from the config filename — `config.ethereum.yaml`
-gets the `ethereum` schema, plain `config.yaml` keeps envio's `public` default.
-That matters: a single-chain config is a different dataset with a different
-`name:`, and sharing storage with the multi-chain one trips envio's
-incompatible-config guard. Set either variable explicitly to override. They cannot be a single process: envio
-serves GraphQL through Hasura, and its own Express server has fixed routes with
-no extension point, so a GraphQL endpoint cannot be mounted inside it.
+| Env | Default | Meaning |
+|---|---|---|
+| `GRAPH_API_CHAIN_ID` | *unset* | The one chain to serve. **Unset = server does not start.** |
+| `GRAPH_API_PORT` | `4350` | |
+| `GRAPH_API_PG_MAX` | `4` | Its own pool, separate from the indexer's writer pool |
 
-Or separately, if you want them in different terminals:
+Connection settings come from envio's own `ENVIO_PG_*` variables, so it reads
+the same database the indexer writes. `GET /health` returns liveness; queries are
+`POST /`, like any subgraph endpoint.
 
-```bash
-pnpm envio dev --config config.ethereum.yaml
+### When it does and does not start
 
-cd proxy && pnpm install
-PROXY_CHAIN_ID=1 PROXY_HASURA_URL=http://localhost:8080/v1/graphql pnpm dev
-```
+`src/handlers/graph-api.ts` is the only file under `src/handlers/` that is not an
+event handler, and it binds a port only when there is a live persistence layer:
 
-See [proxy/README.md](proxy/README.md) for the full translation surface, the
-`_meta` shim, and the error policy. It is a separate package with its own deps
-and test command; the root `pnpm test` deliberately excludes it.
+| Context | Loads handlers? | Starts server? |
+|---|---|---|
+| `envio dev` / `envio start` | yes — `Main.res.mjs:494` | **yes** (`:492` sets `EnvioGlobal.value.persistence` first) |
+| `createTestIndexer` | yes — `TestIndexer.res.mjs:420` | no — never touches `EnvioGlobal` |
+| `envio codegen` | no | n/a |
+
+A failure to start is logged and swallowed: the indexer keeps indexing. That
+matters because HandlerLoader aborts startup if any handler import rejects.
+
+### Translation
+
+Root fields, filter suffixes, ordering and pagination are mapped to SQL;
+`src/graph-api/schema-map.ts` is the single source of truth. Envio's `<chainId>_`
+id prefix is stripped on the way out and restored on the way in, so callers only
+ever see bare subgraph ids. The transform preserves relative byte ordering, which
+a cursor walk on `orderBy: id` + `id_gt` depends on to terminate.
+
+`Pool.token0`/`token1` are plain `String` columns here rather than relations, so a
+nested `token0 { symbol decimals }` is resolved by one batched `Token` lookup and
+stitched.
+
+Nested `@derivedFrom` lists (`poolDayData(first: 7)`) become **one windowed
+follow-up query** for the whole page rather than a LATERAL per row. envio does not
+create the declared `@index` directives until `finalizeBackfill`, so during a
+backfill every strategy is a sequential scan — one scan for the page beats one per
+parent. Measured on a 100-pool page mid-backfill: **59 ms**, against ~1.9 s for the
+LATERAL form.
+
+`_meta` is synthesized: `block.number` from `progressBlock`, and `block.timestamp`
+from the newest indexed event, because envio's `_meta` view has no block-timestamp
+column at all. For a cursor ceiling that is strictly safer than a true block
+timestamp — it can never advance past data the indexer holds.
+
+### Error policy
+
+A failed request never returns a well-formed empty `data` — that is
+indistinguishable from a healthy end-of-walk, and would let an outage look like a
+completed sync. Unsupported constructs return `200` with `errors[]` and no `data`;
+database failures return `502`. Proxy-generated messages are asserted never to
+match a consumer's transient-gateway retry heuristic, so a permanent bug fails
+fast instead of being retried.
+
+### Limits
+
+- No time-travel (`block: { number: }`) — entity history is not exposed.
+- Only the root fields in `ROOT_FIELDS`. Anything else is a loud error.
+- Reference fields support `{ id }` only; other subfields are rejected rather
+  than silently dropped.
 
 ## Regenerate Files
 

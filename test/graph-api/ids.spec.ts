@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { makeIdCodec, type IdClass } from "../src/ids.js";
-import { TranslationError, UpstreamShapeError } from "../src/errors.js";
+import { makeIdCodec, type IdClass } from "../../src/graph-api/ids.js";
+import { TranslationError, UpstreamShapeError } from "../../src/graph-api/errors.js";
 
 const ids = makeIdCodec(4663);
 
