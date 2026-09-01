@@ -9,6 +9,14 @@ import {
 import { convertTokenToDecimal, sanitizeBD } from "../utils";
 import { createInitialTick } from "../utils/tick";
 import { getChainConfig } from "../utils/chains";
+import {
+  preloadIntervalData,
+  updatePoolDayData,
+  updatePoolHourData,
+  updateTokenDayData,
+  updateTokenHourData,
+  updateUniswapDayData,
+} from "../utils/intervalUpdates";
 
 indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ event, context }) => {
   // Get chain config for pools to skip
@@ -57,6 +65,14 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
   if (!existingToken0 || !existingToken1 || !bundle) return;
 
   if (context.isPreload) {
+    // Warm the interval rows here - see the note in swap-handler.ts.
+    await preloadIntervalData(context, {
+      blockTimestamp: event.block.timestamp,
+      chainId: event.chainId,
+      poolId,
+      tokenIds: [existingToken0.id, existingToken1.id],
+      includeUniswapDayData: true,
+    });
     return;
   }
 
@@ -203,6 +219,22 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
       bundle.ethPriceUSD
     ),
   };
+
+  // ---- interval data (day / hour snapshots) ----
+  // ModifyLiquidity contributes NO volume and NO fees, only the txCount bump
+  // and the price / TVL snapshot - matching
+  // v4-subgraph/src/mappings/modifyLiquidity.ts:176-182, which discards every
+  // return value and has no follow-up mutation block.
+  const blockTimestamp = event.block.timestamp;
+  await Promise.all([
+    updateUniswapDayData(context, poolManager, blockTimestamp),
+    updatePoolDayData(context, pool, blockTimestamp),
+    updatePoolHourData(context, pool, blockTimestamp),
+    updateTokenDayData(context, token0, bundle.ethPriceUSD, blockTimestamp),
+    updateTokenHourData(context, token0, bundle.ethPriceUSD, blockTimestamp),
+    updateTokenDayData(context, token1, bundle.ethPriceUSD, blockTimestamp),
+    updateTokenHourData(context, token1, bundle.ethPriceUSD, blockTimestamp),
+  ]);
 
   // Create ModifyLiquidity entity
   const modifyLiquidityId = `${event.chainId}_${event.transaction.hash}_${event.logIndex}`;

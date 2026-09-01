@@ -80,6 +80,8 @@ type Pool
   hooks: String!
   # derived fields
   ticks: [Tick!]! @derivedFrom(field: "pool")
+  poolHourData: [PoolHourData!]! @derivedFrom(field: "pool")
+  poolDayData: [PoolDayData!]! @derivedFrom(field: "pool")
 }
 
 type Tick
@@ -115,6 +117,9 @@ type Token @storage(postgres: true, clickhouse: true) {
   totalValueLockedUSDUntracked: BigDecimal!
   derivedETH: BigDecimal!
   whitelistPools: [String!]! # Changed from Pool reference to String for simplicity
+  # derived fields
+  tokenDayData: [TokenDayData!]! @derivedFrom(field: "token")
+  tokenHourData: [TokenHourData!]! @derivedFrom(field: "token")
 }
 
 # stores for USD calculations
@@ -206,4 +211,111 @@ type ModifyLiquidity
   tickLower: BigInt! # lower tick of the position
   tickUpper: BigInt! # upper tick of the position
   logIndex: BigInt! # index within the txn
+}
+
+# Data accumulated and condensed into day stats for all of Uniswap, per chain
+type UniswapDayData
+  @storage(postgres: true, clickhouse: true)
+  @index(fields: ["chainId", ["date", "DESC"]]) {
+  id: ID! # <chainId>_<dayIndex>
+  chainId: BigInt!
+  date: Int! # unix timestamp of the start of the day (dayIndex * 86400)
+  volumeETH: BigDecimal! # total daily volume on this chain, in ETH
+  volumeUSD: BigDecimal! # total daily volume on this chain, in USD
+  volumeUSDUntracked: BigDecimal! # untracked daily volume in USD - never written, always 0 (subgraph parity)
+  feesUSD: BigDecimal! # fees in USD
+  txCount: BigInt! # number of daily transactions - snapshot of PoolManager.txCount
+  tvlUSD: BigDecimal! # tvl in USD - snapshot of PoolManager.totalValueLockedUSD
+}
+
+# Data accumulated and condensed into day stats for each pool
+type PoolDayData
+  @storage(postgres: true, clickhouse: true)
+  @index(fields: ["pool", ["date", "DESC"]]) {
+  id: ID! # <chainId>_<poolId>_<dayIndex>
+  chainId: BigInt!
+  date: Int! # unix timestamp of the start of the day (dayIndex * 86400)
+  pool: Pool! # pointer back to Pool
+  liquidity: BigInt! # in range liquidity at end of period
+  sqrtPrice: BigInt! # current price tracker at end of period
+  token0Price: BigDecimal! # price of token0 - derived from sqrtPrice
+  token1Price: BigDecimal! # price of token1 - derived from sqrtPrice
+  tick: BigInt # current tick at end of period
+  tvlUSD: BigDecimal! # tvl derived in USD at end of period
+  volumeToken0: BigDecimal! # volume in token0
+  volumeToken1: BigDecimal! # volume in token1
+  volumeUSD: BigDecimal! # volume in USD
+  feesUSD: BigDecimal! # fees in USD
+  txCount: BigInt! # number of transactions during period
+  open: BigDecimal! # opening price of token0
+  high: BigDecimal! # high price of token0
+  low: BigDecimal! # low price of token0
+  close: BigDecimal! # close price of token0
+}
+
+# hourly stats tracker for pool
+type PoolHourData
+  @storage(postgres: true, clickhouse: true)
+  @index(fields: ["pool", ["periodStartUnix", "DESC"]]) {
+  id: ID! # <chainId>_<poolId>_<hourIndex>
+  chainId: BigInt!
+  periodStartUnix: Int! # unix timestamp for start of hour
+  pool: Pool! # pointer back to Pool
+  liquidity: BigInt! # in range liquidity at end of period
+  sqrtPrice: BigInt! # current price tracker at end of period
+  token0Price: BigDecimal! # price of token0 - derived from sqrtPrice
+  token1Price: BigDecimal! # price of token1 - derived from sqrtPrice
+  tick: BigInt # current tick at end of period
+  tvlUSD: BigDecimal! # tvl derived in USD at end of period
+  volumeToken0: BigDecimal! # volume in token0
+  volumeToken1: BigDecimal! # volume in token1
+  volumeUSD: BigDecimal! # volume in USD
+  feesUSD: BigDecimal! # fees in USD
+  txCount: BigInt! # number of transactions during period
+  open: BigDecimal! # opening price of token0
+  high: BigDecimal! # high price of token0
+  low: BigDecimal! # low price of token0
+  close: BigDecimal! # close price of token0
+}
+
+# daily stats tracker for token
+type TokenDayData
+  @storage(postgres: true, clickhouse: true)
+  @index(fields: ["token", ["date", "DESC"]]) {
+  id: ID! # <chainId>_<tokenAddress>_<dayIndex>
+  chainId: BigInt!
+  date: Int! # unix timestamp of the start of the day (dayIndex * 86400)
+  token: Token! # pointer back to Token
+  volume: BigDecimal! # volume in token units
+  volumeUSD: BigDecimal! # volume in derived USD
+  untrackedVolumeUSD: BigDecimal! # volume in USD even on pools with less reliable USD values
+  totalValueLocked: BigDecimal! # liquidity across all pools in token units
+  totalValueLockedUSD: BigDecimal! # liquidity across all pools in derived USD
+  priceUSD: BigDecimal! # price at end of period in USD
+  feesUSD: BigDecimal! # fees in USD
+  open: BigDecimal! # opening price USD
+  high: BigDecimal! # high price USD
+  low: BigDecimal! # low price USD
+  close: BigDecimal! # close price USD
+}
+
+# hourly stats tracker for token
+type TokenHourData
+  @storage(postgres: true, clickhouse: true)
+  @index(fields: ["token", ["periodStartUnix", "DESC"]]) {
+  id: ID! # <chainId>_<tokenAddress>_<hourIndex>
+  chainId: BigInt!
+  periodStartUnix: Int! # unix timestamp for start of hour
+  token: Token! # pointer back to Token
+  volume: BigDecimal! # volume in token units
+  volumeUSD: BigDecimal! # volume in derived USD
+  untrackedVolumeUSD: BigDecimal! # volume in USD even on pools with less reliable USD values
+  totalValueLocked: BigDecimal! # liquidity across all pools in token units
+  totalValueLockedUSD: BigDecimal! # liquidity across all pools in derived USD
+  priceUSD: BigDecimal! # price at end of period in USD
+  feesUSD: BigDecimal! # fees in USD
+  open: BigDecimal! # opening price USD
+  high: BigDecimal! # high price USD
+  low: BigDecimal! # low price USD
+  close: BigDecimal! # close price USD
 }

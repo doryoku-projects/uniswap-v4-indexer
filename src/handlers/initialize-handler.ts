@@ -2,12 +2,17 @@
  * Initialize event handlers for Uniswap v4 pools
  */
 
-import { indexer, BigDecimal } from "envio";
+import { indexer, BigDecimal, type Pool } from "envio";
 import { getChainConfig } from "../utils/chains";
 import { sqrtPriceX96ToTokenPrices } from "../utils/pricing";
 import { getTokenMetadata } from "../utils/tokenMetadata";
 import { findNativePerToken } from "../utils/pricing";
 import { sanitizeBD } from "../utils";
+import {
+  preloadIntervalData,
+  updatePoolDayData,
+  updatePoolHourData,
+} from "../utils/intervalUpdates";
 
 indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event, context }) => {
   // Get chain config for whitelist tokens and pools to skip
@@ -209,6 +214,12 @@ indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event
   };
 
   if (context.isPreload) {
+    // Warm the interval rows here - see the note in swap-handler.ts.
+    await preloadIntervalData(context, {
+      blockTimestamp: event.block.timestamp,
+      chainId: event.chainId,
+      poolId: `${event.chainId}_${event.params.id}`,
+    });
     return;
   }
 
@@ -223,8 +234,10 @@ indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event
   const feeBps = Number(event.params.fee) / 10000; // Convert to percentage (fee is in bps)
   const poolName = `${token0.symbol} / ${token1.symbol} - ${feeBps}%`;
 
-  // Create new pool with prices
-  context.Pool.set({
+  // Create new pool with prices.
+  // NOTE: hoisted into a named const (was an inline literal) so the interval
+  // updates below can snapshot it - there is no `pool` local otherwise.
+  const pool: Pool = {
     id: `${event.chainId}_${event.params.id}`,
     chainId: BigInt(event.chainId),
     name: poolName,
@@ -257,7 +270,19 @@ indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event
     totalValueLockedUSDUntracked: new BigDecimal(0),
     liquidityProviderCount: 0n,
     hooks: event.params.hooks,
-  });
+  };
+  context.Pool.set(pool);
+
+  // ---- interval data ----
+  // Initialize seeds only the pool day/hour buckets - no token and no protocol
+  // rollup - matching v4-subgraph/src/mappings/poolManager.ts:196-197.
+  // Both buckets get txCount = 1 while Pool.txCount is still 0; that is what
+  // the subgraph does (intervalUpdates.ts:76).
+  await Promise.all([
+    updatePoolDayData(context, pool, event.block.timestamp),
+    updatePoolHourData(context, pool, event.block.timestamp),
+  ]);
+
   context.PoolManager.set(poolManager);
   context.Token.set(token0);
   context.Token.set(token1);

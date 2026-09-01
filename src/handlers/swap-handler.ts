@@ -8,6 +8,14 @@ import { getTrackedAmountUSD, getNativePriceInUSD } from "../utils/pricing";
 import { safeDiv, sanitizeBD } from "../utils/index";
 import { findNativePerToken } from "../utils/pricing";
 import { sqrtPriceX96ToTokenPrices } from "../utils/pricing";
+import {
+  preloadIntervalData,
+  updatePoolDayData,
+  updatePoolHourData,
+  updateTokenDayData,
+  updateTokenHourData,
+  updateUniswapDayData,
+} from "../utils/intervalUpdates";
 
 indexer.onEvent({ contract: "PoolManager", event: "Swap" }, async ({ event, context }) => {
   const chainConfig = getChainConfig(event.chainId);
@@ -82,6 +90,16 @@ indexer.onEvent({ contract: "PoolManager", event: "Swap" }, async ({ event, cont
   token1 = { ...token1, derivedETH: sanitizeBD(token1DerivedETH) };
 
   if (context.isPreload) {
+    // The update* calls at the bottom of this handler sit after this guard, so
+    // their reads would never be batched. Issue them here instead: the preload
+    // pass warms the in-memory table that the sequential pass reads from.
+    await preloadIntervalData(context, {
+      blockTimestamp: event.block.timestamp,
+      chainId: event.chainId,
+      poolId: pool.id,
+      tokenIds: [token0.id, token1.id],
+      includeUniswapDayData: true,
+    });
     return;
   }
 
@@ -241,6 +259,47 @@ indexer.onEvent({ contract: "PoolManager", event: "Swap" }, async ({ event, cont
       bundle.ethPriceUSD
     ),
   };
+
+  // ---- interval data (day / hour snapshots) ----
+  // Ported from v4-subgraph/src/mappings/swap.ts:308-350. The pool / token /
+  // poolManager objects passed here are the POST-event values (see note in
+  // src/utils/intervalUpdates.ts).
+  const blockTimestamp = event.block.timestamp;
+  const poolDelta = {
+    volumeToken0: amount0Abs,
+    volumeToken1: amount1Abs,
+    volumeUSD: amountTotalUSDTracked,
+    feesUSD,
+  };
+  // Subgraph parity: untrackedVolumeUSD on the token interval rows receives the
+  // TRACKED figure (swap.ts:334/339/344/349), not amountTotalUSDUntracked.
+  const token0Delta = {
+    volume: amount0Abs,
+    volumeUSD: amountTotalUSDTracked,
+    untrackedVolumeUSD: amountTotalUSDTracked,
+    feesUSD,
+  };
+  const token1Delta = {
+    volume: amount1Abs,
+    volumeUSD: amountTotalUSDTracked,
+    untrackedVolumeUSD: amountTotalUSDTracked,
+    feesUSD,
+  };
+
+  // Safe to run concurrently: all seven target distinct rows in five tables.
+  await Promise.all([
+    updateUniswapDayData(context, poolManager, blockTimestamp, {
+      volumeETH: amountTotalETHTracked,
+      volumeUSD: amountTotalUSDTracked,
+      feesUSD,
+    }),
+    updatePoolDayData(context, pool, blockTimestamp, poolDelta),
+    updatePoolHourData(context, pool, blockTimestamp, poolDelta),
+    updateTokenDayData(context, token0, bundle.ethPriceUSD, blockTimestamp, token0Delta),
+    updateTokenHourData(context, token0, bundle.ethPriceUSD, blockTimestamp, token0Delta),
+    updateTokenDayData(context, token1, bundle.ethPriceUSD, blockTimestamp, token1Delta),
+    updateTokenHourData(context, token1, bundle.ethPriceUSD, blockTimestamp, token1Delta),
+  ]);
 
   // Use for USD swap amount
   const finalAmountUSD = amountTotalUSDTracked.gt(new BigDecimal("0"))
