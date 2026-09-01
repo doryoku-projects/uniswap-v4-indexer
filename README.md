@@ -66,10 +66,24 @@ It also reverses the `<chainId>_` id prefix this indexer adds, and stitches
 `Pool.token0`/`token1` — stored here as `String` columns rather than relations —
 back into the nested `token0 { id symbol decimals }` shape a subgraph returns.
 
+Run both with one command:
+
 ```bash
-cd proxy
-pnpm install
-PROXY_CHAIN_ID=4663 PROXY_HASURA_URL=http://localhost:8080/v1/graphql pnpm dev
+PROXY_CHAIN_ID=1 ENVIO_CONFIG=config.ethereum.yaml pnpm dev:all
+```
+
+`dev:all` supervises the indexer and the proxy together, prefixes their output,
+and stops the stack if either dies. They cannot be a single process: envio
+serves GraphQL through Hasura, and its own Express server has fixed routes with
+no extension point, so a GraphQL endpoint cannot be mounted inside it.
+
+Or separately, if you want them in different terminals:
+
+```bash
+pnpm envio dev --config config.ethereum.yaml
+
+cd proxy && pnpm install
+PROXY_CHAIN_ID=1 PROXY_HASURA_URL=http://localhost:8080/v1/graphql pnpm dev
 ```
 
 See [proxy/README.md](proxy/README.md) for the full translation surface, the
