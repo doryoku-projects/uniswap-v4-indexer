@@ -73,7 +73,12 @@ PROXY_CHAIN_ID=1 ENVIO_CONFIG=config.ethereum.yaml pnpm dev:all
 ```
 
 `dev:all` supervises the indexer and the proxy together, prefixes their output,
-and stops the stack if either dies. They cannot be a single process: envio
+and stops the stack if either dies. It derives `ENVIO_PG_SCHEMA` and
+`ENVIO_CLICKHOUSE_DATABASE` from the config filename — `config.ethereum.yaml`
+gets the `ethereum` schema, plain `config.yaml` keeps envio's `public` default.
+That matters: a single-chain config is a different dataset with a different
+`name:`, and sharing storage with the multi-chain one trips envio's
+incompatible-config guard. Set either variable explicitly to override. They cannot be a single process: envio
 serves GraphQL through Hasura, and its own Express server has fixed routes with
 no extension point, so a GraphQL endpoint cannot be mounted inside it.
 
