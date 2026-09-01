@@ -45,6 +45,37 @@ pnpm envio dev
 
 The Hasura console is available at [http://localhost:8080](http://localhost:8080) where you can explore and query indexed data using GraphQL.
 
+## Serving the subgraph dialect (`proxy/`)
+
+Envio answers GraphQL through Hasura, whose dialect does not match The Graph's:
+`Pool` not `pools`, `where: { volumeUSD: { _gt: "0" } }` not
+`where: { volumeUSD_gt: "0" }`, `order_by`/`limit`/`offset` not
+`orderBy`/`orderDirection`/`first`/`skip`. None of that is configurable — the
+root field name is fixed to the entity name in Envio's Hasura setup, and the
+argument grammar is Hasura's own.
+
+`proxy/` is a small service that translates between the two, one process per
+chain, so a consumer written against a Uniswap v4 subgraph can point at this
+indexer without changing a single query:
+
+```
+consumer ──(subgraph dialect)──► proxy ──(Hasura dialect)──► this indexer
+```
+
+It also reverses the `<chainId>_` id prefix this indexer adds, and stitches
+`Pool.token0`/`token1` — stored here as `String` columns rather than relations —
+back into the nested `token0 { id symbol decimals }` shape a subgraph returns.
+
+```bash
+cd proxy
+pnpm install
+PROXY_CHAIN_ID=4663 PROXY_HASURA_URL=http://localhost:8080/v1/graphql pnpm dev
+```
+
+See [proxy/README.md](proxy/README.md) for the full translation surface, the
+`_meta` shim, and the error policy. It is a separate package with its own deps
+and test command; the root `pnpm test` deliberately excludes it.
+
 ## Regenerate Files
 
 If you modify `config.yaml` or `schema.graphql`:

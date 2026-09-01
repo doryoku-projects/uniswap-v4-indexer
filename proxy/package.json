@@ -1,0 +1,24 @@
+{
+  "name": "envio-graph-proxy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Serves The Graph's query dialect in front of an Envio/Hasura indexer, one process per chain.",
+  "engines": { "node": ">=22.0.0" },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "dev": "tsx watch src/main.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "graphql": "16.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.12.2",
+    "tsx": "4.19.2",
+    "typescript": "5.7.2",
+    "vitest": "4.1.0"
+  }
+}
