@@ -13,7 +13,8 @@
     "dev": "node scripts/dev.mjs",
     "start": "envio start",
     "test": "vitest run",
-    "dev:raw": "envio dev"
+    "dev:raw": "envio dev",
+    "clickhouse:allow-host": "node scripts/clickhouse-allow-host.mjs"
   },
   "devDependencies": {
     "@types/node": "24.12.2",

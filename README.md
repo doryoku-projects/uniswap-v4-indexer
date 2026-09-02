@@ -78,6 +78,21 @@ Connection settings come from envio's own `ENVIO_PG_*` variables, so it reads
 the same database the indexer writes. `GET /health` returns liveness; queries are
 `POST /`, like any subgraph endpoint.
 
+### Local ClickHouse auth
+
+The official clickhouse image restricts the `default` user to localhost when no
+password is set, but envio connects from the host via the published port — so the
+container rejects it with `Authentication failed`. envio's orchestration passes
+only `CLICKHOUSE_DB` when creating the container, so a users.d drop-in is the only
+lever, and it does not survive a container **recreate** (a Docker Desktop restart
+is enough).
+
+```bash
+pnpm clickhouse:allow-host
+```
+
+Re-runnable, local development only.
+
 ### When it does and does not start
 
 `src/handlers/graph-api.ts` is the only file under `src/handlers/` that is not an
