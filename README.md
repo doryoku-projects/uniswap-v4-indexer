@@ -57,8 +57,16 @@ starts an HTTP server on import and reads Postgres directly. No Hasura, no
 sidecar, no second process.
 
 ```bash
-ENVIO_HASURA=false GRAPH_API_CHAIN_ID=1 pnpm envio dev --config config.ethereum.yaml
+ENVIO_HASURA=false GRAPH_API_CHAIN_ID=1 pnpm dev --config config.ethereum.yaml
 ```
+
+`pnpm dev` wraps `envio dev` via `scripts/dev.mjs`, which derives
+`ENVIO_PG_SCHEMA` and `ENVIO_CLICKHOUSE_DATABASE` from the config filename —
+`config.ethereum.yaml` gets the `ethereum` schema, plain `config.yaml` keeps
+envio's `public` default. A single-chain config is a different dataset with a
+different `name:`, so sharing storage with the multi-chain one trips envio's
+incompatible-config guard. Setting either variable explicitly overrides the
+derivation; `pnpm dev:raw` bypasses the wrapper entirely.
 
 | Env | Default | Meaning |
 |---|---|---|
