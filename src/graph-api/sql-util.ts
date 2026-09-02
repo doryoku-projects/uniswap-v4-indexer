@@ -6,14 +6,19 @@
 
 import { InternalError } from "./errors.js";
 
-const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
-
-/** Quote a Postgres identifier, rejecting anything that is not a plain name. */
+/**
+ * Quote a Postgres identifier.
+ *
+ * Doubling any embedded `"` is Postgres's own escaping rule and is what makes
+ * this injection-safe — there is no way out of the quotes. Restricting to a
+ * narrow charset instead looks safer but is not: it rejects names Postgres and
+ * envio both accept, such as an ENVIO_PG_SCHEMA containing a hyphen.
+ */
 export function ident(name: string): string {
-  if (!IDENT.test(name)) {
+  if (name.length === 0 || name.includes("\u0000")) {
     throw new InternalError(`refusing to build SQL with identifier ${JSON.stringify(name)}`);
   }
-  return `"${name}"`;
+  return `"${name.replace(/"/g, '""')}"`;
 }
 
 /**

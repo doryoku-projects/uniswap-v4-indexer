@@ -22,8 +22,6 @@ export interface GraphApiConfig {
   };
 }
 
-const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
-
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): GraphApiConfig | null {
   // Absent chain id means "not configured" — the server simply does not start,
   // which is the right default for an indexer that nobody queries this way.
@@ -35,9 +33,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GraphApiConfig
     throw new InternalError(`GRAPH_API_CHAIN_ID must be a positive integer, got ${JSON.stringify(raw)}`);
   }
 
+  // Any name envio accepts must work here. Postgres allows hyphens and more in
+  // a quoted identifier, and `ident()` quotes correctly — so no charset limit.
   const schema = env.ENVIO_PG_SCHEMA ?? "public";
-  if (!IDENT.test(schema)) {
-    throw new InternalError(`ENVIO_PG_SCHEMA ${JSON.stringify(schema)} is not a plain identifier`);
+  if (schema.length === 0) {
+    throw new InternalError("ENVIO_PG_SCHEMA is empty");
   }
 
   return {

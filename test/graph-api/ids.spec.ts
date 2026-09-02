@@ -70,3 +70,24 @@ describe("malformed input", () => {
     expect(() => ids.outbound("1_0xabc", "pool")).toThrow(UpstreamShapeError);
   });
 });
+
+describe("identifier quoting", () => {
+  it("accepts any schema name Postgres accepts, including a hyphen", async () => {
+    const { ident } = await import("../../src/graph-api/sql-util.js");
+    // envio happily uses ENVIO_PG_SCHEMA=robinhood-mainnet; rejecting it here
+    // silently disabled the API while indexing carried on.
+    expect(ident("robinhood-mainnet")).toBe('"robinhood-mainnet"');
+    expect(ident("ethereum")).toBe('"ethereum"');
+    expect(ident("with space")).toBe('"with space"');
+  });
+
+  it("escapes an embedded quote rather than letting it break out", async () => {
+    const { ident } = await import("../../src/graph-api/sql-util.js");
+    expect(ident('a"; DROP TABLE x; --')).toBe('"a""; DROP TABLE x; --"');
+  });
+
+  it("still refuses an empty identifier", async () => {
+    const { ident } = await import("../../src/graph-api/sql-util.js");
+    expect(() => ident("")).toThrow();
+  });
+});
