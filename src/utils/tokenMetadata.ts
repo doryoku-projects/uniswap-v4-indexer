@@ -45,6 +45,17 @@ const TokenMetadata = S.schema({
   name: S.string,
   symbol: S.string,
   decimals: S.number,
+  /**
+   * false ⇒ `decimals` is the 18 FALLBACK, not an on-chain read.
+   *
+   * This distinction is load-bearing. `decimals` scales every token amount, so
+   * a wrong value corrupts amounts and fees by a power of ten while looking
+   * entirely plausible. Measured against the reference Ponder indexer:
+   * eUSDt-3 (0xa446938b…3e9e) is 6 decimals on-chain, was stored as 18, and
+   * every fee on its positions came out 1e12 too small. `name` and `symbol`
+   * being wrong is cosmetic by comparison.
+   */
+  decimalsResolved: S.boolean,
 });
 type TokenMetadata = S.Output<typeof TokenMetadata>;
 
@@ -140,7 +151,10 @@ export const getTokenMetadata = createEffect(
       chainId: t.item(1, S.number as S.Schema<EvmChainId>),
     })),
     output: TokenMetadata,
-    rateLimit: false,
+    // One multicall per token, but it shares the RPC's per-second budget with
+    // the position-fee effects in src/utils/stateView.ts — keep the three in
+    // sync when changing plan.
+    rateLimit: { calls: 4, per: "second" },
     cache: true,
   },
   async ({ context, input: { address, chainId } }) => {
@@ -151,6 +165,7 @@ export const getTokenMetadata = createEffect(
         name: chainConfig.nativeTokenDetails.name,
         symbol: chainConfig.nativeTokenDetails.symbol,
         decimals: Number(chainConfig.nativeTokenDetails.decimals),
+        decimalsResolved: true, // from chain config, not a fallback
       };
     }
 
@@ -165,6 +180,7 @@ export const getTokenMetadata = createEffect(
         name: tokenOverride.name,
         symbol: tokenOverride.symbol,
         decimals: Number(tokenOverride.decimals),
+        decimalsResolved: true, // explicitly configured
       };
     }
 
@@ -249,27 +265,54 @@ async function fetchTokenMetadataMulticall(
     );
   }
 
-  // If every ERC-20 read failed, the most likely cause is a transient RPC
-  // error rather than a token that genuinely implements none of the methods.
-  // Don't persist this result so the next sync can retry.
-  if (nameFailed && symbolFailed && decimalsFailed) {
+  const { decimals: resolvedDecimals, decimalsResolved: decimalsInRange } =
+    resolveDecimals(decimalsResult);
+
+  // Do NOT persist an unresolved decimals. Previously the cache was only
+  // skipped when name AND symbol AND decimals all failed, so a lone decimals
+  // failure froze the 18 fallback forever — there is no other correction path,
+  // and `cache: true` means it is never retried. That is exactly how eUSDt-3
+  // ended up at 18 instead of 6, scaling every fee on its positions by 1e12.
+  // Decimals alone is enough to refuse the cache; name/symbol are cosmetic.
+  if (!decimalsInRange) {
     context.cache = false;
     context.log.warn(
-      `All ERC-20 reads failed for ${address} on chain ${chainId}; not caching fallback metadata`
+      `decimals() unresolved for ${address} on chain ${chainId} ` +
+        `(raw=${String(decimalsResult)}); using the 18 fallback and NOT caching, ` +
+        `so the next sync retries. Amounts for this token are unreliable until then.`
+    );
+  } else if (nameFailed && symbolFailed) {
+    context.log.warn(
+      `name() and symbol() both failed for ${address} on chain ${chainId}; decimals is good so amounts are safe`
     );
   }
 
   return {
     name: name || "unknown",
     symbol: symbol || "UNKNOWN",
-    decimals:
-      typeof decimalsResult === "number" &&
-      // There's a token on base with decimals ~= 9132491757359273498234t629765928734n
-      // which literally crashes our indexer. To prevent it from happening
-      // use 18 for all tokens with decimals > 50
-      // This is the biggest decimals we've seen so far for other tokens.
-      decimalsResult <= 50
-        ? decimalsResult
-        : 18,
+    decimals: resolvedDecimals,
+    decimalsResolved: decimalsInRange,
   };
+}
+
+/**
+ * Decide whether an ERC-20 `decimals()` read may be trusted.
+ *
+ * Exported and pure so the rule is testable, because getting it wrong is
+ * expensive and silent: `decimals` scales every token amount, so a fallback
+ * masquerading as a real read shifts fees and balances by a power of ten while
+ * looking completely normal.
+ *
+ * Only an in-range numeric read counts as resolved:
+ *   - null  -> the call failed (commonly a transient rate limit). Fallback.
+ *   - > 50  -> a real token on Base reports ~9.1e33 decimals and crashes the
+ *              indexer, so it is clamped. Still a fallback, not truth.
+ */
+export function resolveDecimals(decimalsResult: number | null | undefined): {
+  decimals: number;
+  decimalsResolved: boolean;
+} {
+  const ok = typeof decimalsResult === "number" && Number.isFinite(decimalsResult) &&
+    decimalsResult >= 0 && decimalsResult <= 50;
+  return { decimals: ok ? decimalsResult : 18, decimalsResolved: ok };
 }

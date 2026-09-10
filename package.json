@@ -14,7 +14,8 @@
     "start": "envio start",
     "test": "vitest run",
     "dev:raw": "envio dev",
-    "clickhouse:allow-host": "node scripts/clickhouse-allow-host.mjs"
+    "clickhouse:allow-host": "node scripts/clickhouse-allow-host.mjs",
+    "progress": "node scripts/progress.mjs"
   },
   "devDependencies": {
     "@types/node": "24.12.2",

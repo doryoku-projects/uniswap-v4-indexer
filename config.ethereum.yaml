@@ -13,6 +13,10 @@ contracts:
           transaction_fields:
             - "hash"
             - "from"
+            # gasUsed x effectiveGasPrice = the tx's L2 execution cost, charged
+            # once per tx to the lowest-logIndex position row it touches.
+            - "gasUsed"
+            - "effectiveGasPrice"
       - event: OperatorSet(address indexed owner, address indexed operator, bool approved)
       - event: OwnershipTransferred(address indexed user, address indexed newOwner)
       - event: ProtocolFeeControllerUpdated(address indexed protocolFeeController)

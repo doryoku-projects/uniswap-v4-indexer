@@ -9,6 +9,7 @@ import {
 import { convertTokenToDecimal, sanitizeBD } from "../utils";
 import { createInitialTick } from "../utils/tick";
 import { getChainConfig } from "../utils/chains";
+import { trackPositionFees } from "./position-fees";
 import {
   preloadIntervalData,
   updatePoolDayData,
@@ -63,6 +64,20 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
       hookStatsId ? context.HookStats.get(hookStatsId) : undefined,
     ]);
   if (!existingToken0 || !existingToken1 || !bundle) return;
+
+  // Position liquidity + EXACT collected fees. Deliberately called BEFORE the
+  // isPreload guard: it issues the one on-chain read per modify, and the
+  // preload pass is what batches those reads across the whole block range. It
+  // returns without writing during preload.
+  await trackPositionFees({
+    event,
+    context,
+    poolId,
+    poolTick: existingPool.tick ?? 0n,
+    poolSqrtPriceX96: existingPool.sqrtPrice ?? 0n,
+    token0Decimals: existingToken0.decimals,
+    token1Decimals: existingToken1.decimals,
+  });
 
   if (context.isPreload) {
     // Warm the interval rows here - see the note in swap-handler.ts.

@@ -105,6 +105,10 @@ type Token @storage(postgres: true) {
   symbol: String!
   name: String!
   decimals: BigInt!
+  # false ⇒ `decimals` is the 18 fallback, NOT an on-chain read, so every amount
+  # scaled by it is unreliable. Indexed so a repair sweep can find these rows.
+  # The Initialize handler re-fetches and corrects any token still false.
+  decimalsResolved: Boolean! @index
   totalSupply: BigInt!
   volume: BigDecimal!
   volumeUSD: BigDecimal!
@@ -143,15 +147,113 @@ type HookStats @storage(postgres: true) {
 
 type Position @storage(postgres: true) {
   id: ID! # <chainId>_<tokenId>
-  chainId: BigInt!
+  # Indexed so FeeSync's getWhere can filter by chain in SQL. Without it the
+  # query returns every active position on EVERY configured chain each tick.
+  chainId: BigInt! @index
   tokenId: BigInt! @index
+  # LOWERCASE, matching the Ponder indexer. address_format defaults to checksum
+  # in envio, so these are explicitly lowercased in the handlers — a consumer
+  # querying `owner = '0xabc...'` in lowercase would otherwise get zero rows.
   owner: String! @index # address of current owner
   origin: String! # the EOA that minted the position
   createdAtTimestamp: BigInt!
+
+  # ─── Liquidity + fee tracking ───────────────────────────────────────────────
+  # Ported from the Ponder v4 position indexer so this indexer can serve the
+  # same position/fee shape. Collected fees are EXACT (derived from the
+  # contract's own feeGrowthInsideLast via one getPositionInfo call per modify);
+  # uncollected fees are a live snapshot refreshed by the FeeSync block handler.
+  #
+  # `tickLower`/`tickUpper` are nullable because a Position row is created by
+  # PositionManager.Transfer (the mint), which may be indexed before or without
+  # the matching PoolManager.ModifyLiquidity.
+  #
+  # `poolId` is NOT nullable, and holds the BARE bytes32 pool id rather than the
+  # namespaced `<chainId>_<bytes32>` used for `Pool.id`. Both choices exist to
+  # keep the Tickwise backend working against this indexer with no changes on
+  # its side:
+  #   - Its position query selects `poolId`, then feeds the values straight back
+  #     as `pools(where: {id_in: …})` where the `pool` id class re-adds the
+  #     chain prefix. A namespaced value here would be prefixed twice and match
+  #     nothing — a well-formed EMPTY list, the hardest kind of failure to see.
+  #   - It reads `raw.poolId.toLowerCase()` with no null guard, so a null would
+  #     throw rather than degrade.
+  # `""` is the "not yet known" sentinel, set until the first ModifyLiquidity.
+  # This deliberately mirrors the shape the backend was built against; see
+  # backend/src/subgraph/hyperindex/schema-map.ts, where the field is declared
+  # `idClass: "opaque"` precisely because it carries no prefix.
+  poolId: String! @index
+  tickLower: BigInt
+  tickUpper: BigInt
+  liquidity: BigInt! # raw liquidity units
+  isActive: Boolean! @index # liquidity > 0
+  # false ⇒ amounts are NOT physically trustworthy (degenerate-pool guard).
+  isPriceable: Boolean!
+  createdAtBlockNumber: BigInt!
+  closedAtTimestamp: BigInt # null while open
+
+  # Cashflow aggregates, human-readable token units.
+  depositedToken0: Float!
+  depositedToken1: Float!
+  withdrawnToken0: Float!
+  withdrawnToken1: Float!
+  totalFeesCollected0: Float!
+  totalFeesCollected1: Float!
+  totalFeesUncollected0: Float!
+  totalFeesUncollected1: Float!
+
+  # Current in-pool amounts, human-readable token units.
+  amount0: Float!
+  amount1: Float!
+
+  # Internal: last-settled fee growth (raw), the baseline for the next delta.
+  feeGrowthInside0LastX128: BigInt!
+  feeGrowthInside1LastX128: BigInt!
+  # false ⇒ totalFeesCollected* is NOT backed by a verified on-chain baseline:
+  # this chain has no StateView address or archive RPC, a read failed, or the
+  # pool was degenerate. Consumers must treat collected fees as INCOMPLETE, not
+  # as "earned nothing". Load-bearing: settling against an unverified baseline
+  # would diff against 0 and book the position's entire historical fee growth
+  # at once, so a fee is only ever booked while this is true.
+  feeBaselineValid: Boolean!
+
+  # Native gas token spent by this position's transactions (L2 execution gas).
+  totalGasCostETH: Float!
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: BigInt!
+
   # derived fields
   subscriptions: [Subscribe!]! @derivedFrom(field: "position")
   unsubscriptions: [Unsubscribe!]! @derivedFrom(field: "position")
   transfers: [Transfer!]! @derivedFrom(field: "position")
+  positionTransactions: [PositionTransaction!]! @derivedFrom(field: "position")
+}
+
+enum PositionTransactionType {
+  DEPOSIT
+  WITHDRAW
+  COLLECT_FEES
+}
+
+# One row per position-affecting leg of a transaction. A single tx can produce a
+# DEPOSIT/WITHDRAW row and a COLLECT_FEES row for the same position, because v4
+# settles accrued fees on every modifyLiquidity.
+type PositionTransaction
+  @storage(postgres: true)
+  @index(fields: ["chainId", "tokenId", ["timestamp", "DESC"]]) {
+  id: ID! # <chainId>_<txHash>_<logIndex>_<type>
+  chainId: BigInt!
+  txHash: String! @index
+  logIndex: BigInt!
+  type: PositionTransactionType!
+  tokenId: BigInt! @index
+  position: Position!
+  amount0: Float! # human units, positive magnitude
+  amount1: Float!
+  gasCostETH: Float! # human native gas token; charged once per tx
+  timestamp: BigInt! @index
+  blockNumber: BigInt!
+  sender: String! # LOWERCASE, matching Ponder
 }
 
 type Transfer @storage(postgres: true) {

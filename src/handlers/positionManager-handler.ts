@@ -6,6 +6,7 @@
  * Unsubscribe are immutable per-event records.
  */
 import { indexer } from "envio";
+import { positionDefaults } from "./position-fees";
 
 // Positions are per-chain: PositionManager tokenIds collide across chains
 const positionId = (chainId: number, tokenId: bigint) =>
@@ -23,7 +24,13 @@ indexer.onEvent(
     const id = positionId(event.chainId, event.params.id);
 
     // Mint (from == zero address) creates the position; later transfers only
-    // change ownership
+    // change ownership.
+    //
+    // The liquidity and fee columns get their zero defaults here because this
+    // handler may run before the matching PoolManager.ModifyLiquidity (event
+    // order within a mint tx is not guaranteed). The ModifyLiquidity path fills
+    // them in and never reads them back from this row, so whichever runs first
+    // is safe. The spread below preserves whatever the other path already wrote.
     const position = (await context.Position.get(id)) ?? {
       id,
       chainId: BigInt(event.chainId),
@@ -31,6 +38,10 @@ indexer.onEvent(
       owner: event.params.to,
       origin: event.transaction.from || "NONE",
       createdAtTimestamp: BigInt(event.block.timestamp),
+      ...positionDefaults(),
+      createdAtBlockNumber: BigInt(event.block.number),
+      updatedAtBlock: BigInt(event.block.number),
+      updatedAtTimestamp: BigInt(event.block.timestamp),
     };
 
     context.Position.set({ ...position, owner: event.params.to });

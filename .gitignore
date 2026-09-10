@@ -36,3 +36,8 @@ build
 .DS_Store
 .env
 .pnpm-store
+
+# Local indexer run logs (created by `pnpm dev > dev-<chain>.log`)
+dev-*.log
+# Scratch scripts from local debugging
+*-tmp.mjs

@@ -107,6 +107,7 @@ indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event
       symbol: metadata.symbol,
       name: metadata.name,
       decimals: BigInt(metadata.decimals),
+      decimalsResolved: metadata.decimalsResolved,
       totalSupply: 0n,
       volume: new BigDecimal("0"),
       volumeUSD: new BigDecimal("0"),
@@ -121,9 +122,36 @@ indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event
       whitelistPools: [], // Initialize empty array
     };
   } else {
+    // SELF-HEAL. A token whose decimals never resolved has the 18 fallback
+    // stored, which silently mis-scales every amount for its pools. The effect
+    // no longer caches an unresolved read, so retrying here is cheap and
+    // eventually corrects the row — this is the correction path Ponder gets
+    // from ensureToken and that this indexer previously lacked entirely.
+    let healed0 = token0;
+    if (!token0.decimalsResolved) {
+      const retry = await context.effect(getTokenMetadata, {
+        address: event.params.currency0,
+        chainId: event.chainId,
+      });
+      if (retry.decimalsResolved) {
+        context.log.info("corrected token decimals from the 18 fallback", {
+          token: token0Id,
+          from: token0.decimals.toString(),
+          to: retry.decimals,
+          symbol: retry.symbol,
+        });
+        healed0 = {
+          ...token0,
+          symbol: retry.symbol,
+          name: retry.name,
+          decimals: BigInt(retry.decimals),
+          decimalsResolved: true,
+        };
+      }
+    }
     token0 = {
-      ...token0,
-      poolCount: token0.poolCount + 1n,
+      ...healed0,
+      poolCount: healed0.poolCount + 1n,
     };
   }
 
@@ -141,6 +169,7 @@ indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event
       symbol: metadata.symbol,
       name: metadata.name,
       decimals: BigInt(metadata.decimals),
+      decimalsResolved: metadata.decimalsResolved,
       totalSupply: 0n,
       volume: new BigDecimal("0"),
       volumeUSD: new BigDecimal("0"),
@@ -155,9 +184,36 @@ indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event
       whitelistPools: [], // Initialize empty array
     };
   } else {
+    // SELF-HEAL. A token whose decimals never resolved has the 18 fallback
+    // stored, which silently mis-scales every amount for its pools. The effect
+    // no longer caches an unresolved read, so retrying here is cheap and
+    // eventually corrects the row — this is the correction path Ponder gets
+    // from ensureToken and that this indexer previously lacked entirely.
+    let healed1 = token1;
+    if (!token1.decimalsResolved) {
+      const retry = await context.effect(getTokenMetadata, {
+        address: event.params.currency1,
+        chainId: event.chainId,
+      });
+      if (retry.decimalsResolved) {
+        context.log.info("corrected token decimals from the 18 fallback", {
+          token: token1Id,
+          from: token1.decimals.toString(),
+          to: retry.decimals,
+          symbol: retry.symbol,
+        });
+        healed1 = {
+          ...token1,
+          symbol: retry.symbol,
+          name: retry.name,
+          decimals: BigInt(retry.decimals),
+          decimalsResolved: true,
+        };
+      }
+    }
     token1 = {
-      ...token1,
-      poolCount: token1.poolCount + 1n,
+      ...healed1,
+      poolCount: healed1.poolCount + 1n,
     };
   }
 
