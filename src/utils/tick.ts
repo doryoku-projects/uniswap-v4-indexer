@@ -7,10 +7,12 @@ export function createInitialTick(
   tickIdx: number,
   poolId: string,
   timestamp: bigint,
-  blockNumber: bigint
+  blockNumber: bigint,
+  chainId: bigint
 ) {
   const tick = {
     id: tickId,
+    chainId,
     pool_id: poolId,
     tickIdx: BigInt(tickIdx),
     poolAddress: poolId,

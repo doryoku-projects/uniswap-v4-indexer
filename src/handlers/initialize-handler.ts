@@ -33,6 +33,7 @@ indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event
   if (!poolManager) {
     poolManager = {
       id: `${event.chainId}_${event.srcAddress}`,
+      chainId: BigInt(event.chainId),
       poolCount: 1n,
       txCount: 0n,
       totalVolumeUSD: new BigDecimal(0),
@@ -73,6 +74,7 @@ indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event
     if (!hookStats) {
       hookStats = {
         id: hookStatsId,
+        chainId: BigInt(event.chainId),
         numberOfPools: 0n,
         numberOfSwaps: 0n,
         firstPoolCreatedAt: BigInt(event.block.timestamp),
@@ -101,6 +103,7 @@ indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event
     });
     token0 = {
       id: token0Id,
+      chainId: BigInt(event.chainId),
       symbol: metadata.symbol,
       name: metadata.name,
       decimals: BigInt(metadata.decimals),
@@ -135,6 +138,7 @@ indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event
     });
     token1 = {
       id: token1Id,
+      chainId: BigInt(event.chainId),
       symbol: metadata.symbol,
       name: metadata.name,
       decimals: BigInt(metadata.decimals),
@@ -237,6 +241,7 @@ indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event
   // updates below can snapshot it - there is no `pool` local otherwise.
   const pool: Pool = {
     id: `${event.chainId}_${event.params.id}`,
+    chainId: BigInt(event.chainId),
     name: poolName,
     createdAtTimestamp: BigInt(event.block.timestamp),
     createdAtBlockNumber: BigInt(event.block.number),
