@@ -28,7 +28,10 @@
  * cache dies with the process and every rebuild re-traces the entire history.
  * Envio's effect cache is persisted and keyed on the input, so a SUCCESSFUL
  * trace is taken once EVER, across restarts and resyncs, and `rateLimit` bounds
- * the archive node natively. Degraded results opt out via `context.cache = false`
+ * the archive node natively. That per-TRANSACTION key is also what makes the
+ * widened trace gate affordable: a 15-frame router batch is one trace shared by
+ * every event in it, measured at +7,381 traces and at most 1.6x over the whole
+ * history of chain 43114. Degraded results opt out via `context.cache = false`
  * — caching one would make a transient provider failure a permanent zero. That makes the per-transaction cache redundant: it is
  * subsumed by returning every salt's fees for the whole transaction in one
  * cached call, which is exactly what this effect's output does.
@@ -41,7 +44,12 @@ import type { PublicClient } from "viem";
 import { absBig, decodeBalanceDelta } from "../utils/fees";
 import { getRpcUrl } from "../utils/rpc";
 
-const MODIFY_LIQ_ABI = [
+/**
+ * Exported ONLY so the pairing tests and the replay harness encode calldata with
+ * the exact shape this file decodes, rather than a hand-copied second version of
+ * it that could drift.
+ */
+export const MODIFY_LIQ_ABI = [
   {
     type: "function",
     name: "modifyLiquidity",
@@ -208,6 +216,37 @@ interface TraceNode {
   calls?: TraceNode[];
 }
 
+/**
+ * One decoded `PoolManager.modifyLiquidity` call frame.
+ *
+ * `ordinal` IS THE PAIRING KEY, and it is the whole point of this shape. A
+ * settlement transaction emits TWO ModifyLiquidity events for the SAME salt:
+ * the first carries `feesAccrued`, the second carries (0, 0). Matching a
+ * handler's event to its frame by salt alone therefore picks one of the two
+ * arbitrarily — last-wins picked the zero, first-wins double-counts once both
+ * events reach the trace. Matching on (salt, tickLower, tickUpper,
+ * liquidityDelta) is also not enough: 35 Avalanche transactions carry two frames
+ * identical in all four fields (tx 0x44e8625d81, position 43114_7842, among
+ * them). Only the ORDINAL — 0-based position among frames sharing a salt, in
+ * execution order — separates them.
+ *
+ * The ticks and the delta ride along NOT as the pairing key but as an INTEGRITY
+ * CHECK: the handler asserts the frame it was handed describes the event it is
+ * holding, and records zero rather than a guess when it does not.
+ */
+export interface ModifyFrame {
+  /** Decimal string of the bytes32 salt — the NFT tokenId for a PositionManager call. */
+  readonly salt: string;
+  /** 0-based index among frames with this salt, in EXECUTION order. */
+  readonly ordinal: number;
+  readonly tickLower: number;
+  readonly tickUpper: number;
+  readonly liquidityDelta: bigint;
+  /** MAGNITUDES of `feesAccrued`. */
+  readonly amount0: bigint;
+  readonly amount1: bigint;
+}
+
 /** Every PoolManager.modifyLiquidity frame with a complete BalanceDelta output. */
 function collectModifyCalls(node: TraceNode | undefined, acc: TraceNode[], poolManager: string): void {
   if (
@@ -225,6 +264,61 @@ function collectModifyCalls(node: TraceNode | undefined, acc: TraceNode[], poolM
   for (const c of node?.calls ?? []) collectModifyCalls(c, acc, poolManager);
 }
 
+/**
+ * Decode a callTracer trace into ordered, ordinal-stamped `modifyLiquidity`
+ * frames. PURE — no network, no context — so the replay harness can run the
+ * exact production pairing against real traces.
+ *
+ * EXECUTION ORDER IS THE CONTRACT. `collectModifyCalls` walks the tree
+ * depth-first, visiting a node before its children, which is the order the EVM
+ * actually entered those calls; nothing here sorts or re-groups, and nothing may
+ * start to. The pairing is only sound because the k-th same-salt PoolManager
+ * ModifyLiquidity LOG is the k-th same-salt frame — verified across all 2,062
+ * Avalanche settlement transactions, matching on (tickLower, tickUpper,
+ * liquidityDelta, salt), 2062/2062 with zero exceptions.
+ *
+ * A frame whose calldata will not decode is SKIPPED, which shifts the ordinals
+ * of later same-salt frames. It cannot be counted instead: a frame with no
+ * readable salt cannot be assigned to a salt's sequence at all. The handler's
+ * tick/delta integrity check is what catches the resulting mismatch, and it
+ * records zero rather than the wrong frame's money. In practice the selector
+ * filter above means the decode cannot fail.
+ */
+export function framesFromTrace(trace: TraceNode | undefined, poolManager: string): ModifyFrame[] {
+  const calls: TraceNode[] = [];
+  collectModifyCalls(trace, calls, poolManager.toLowerCase());
+
+  const seenPerSalt = new Map<string, number>();
+  const out: ModifyFrame[] = [];
+  for (const c of calls) {
+    let params: { tickLower: number; tickUpper: number; liquidityDelta: bigint; salt: string };
+    try {
+      params = decodeFunctionData({
+        abi: MODIFY_LIQ_ABI,
+        data: c.input as `0x${string}`,
+      }).args[1] as typeof params;
+    } catch {
+      continue;
+    }
+    const salt = BigInt(params.salt).toString();
+    const ordinal = seenPerSalt.get(salt) ?? 0;
+    seenPerSalt.set(salt, ordinal + 1);
+
+    // feesAccrued is the SECOND return word: chars 66..130 of the output.
+    const delta = decodeBalanceDelta(BigInt("0x" + (c.output as string).slice(66, 130)));
+    out.push({
+      salt,
+      ordinal,
+      tickLower: Number(params.tickLower),
+      tickUpper: Number(params.tickUpper),
+      liquidityDelta: BigInt(params.liquidityDelta),
+      amount0: absBig(delta.amount0),
+      amount1: absBig(delta.amount1),
+    });
+  }
+  return out;
+}
+
 const clients: Record<number, PublicClient> = {};
 function traceClient(chainId: number): PublicClient {
   if (!clients[chainId]) {
@@ -234,8 +328,13 @@ function traceClient(chainId: number): PublicClient {
 }
 
 /**
- * Collected fees for EVERY position touched by one transaction, keyed by salt
- * (which is the NFT tokenId).
+ * Collected fees for EVERY `modifyLiquidity` frame of one transaction, in
+ * execution order, each stamped with its per-salt ordinal.
+ *
+ * ONE ROW PER FRAME, NOT PER SALT. Keying the output by salt is exactly the
+ * defect this shape exists to prevent: a settlement transaction routinely has
+ * two same-salt frames, one carrying all the fees and one carrying (0, 0), and
+ * any salt-keyed collapse silently keeps one of them.
  *
  * Returns the whole transaction rather than one position, so a batched
  * multi-position transaction costs exactly one trace and one cache entry. An
@@ -243,10 +342,20 @@ function traceClient(chainId: number): PublicClient {
  * capability gap — the caller records no collected fee and must NOT throw.
  *
  * Amounts are MAGNITUDES: `feesAccrued` is signed, a collected fee is not.
+ *
+ * WIDENING THIS SCHEMA IS SAFE AGAINST A WARM CACHE. A persisted row that no
+ * longer parses is not a crash and not a silent zero: `LoadLayer.res.mjs:173-187`
+ * catches the schema error, calls `recordInvalidation`, logs "Invalidated effect
+ * cache" at trace level, and the input falls through to a fresh trace. So rows
+ * written before `ordinal` existed are re-traced rather than mis-read.
  */
 const FeesBySalt = S.array(
   S.schema({
     salt: S.string,
+    ordinal: S.number,
+    tickLower: S.number,
+    tickUpper: S.number,
+    liquidityDelta: S.bigint,
     amount0: S.bigint,
     amount1: S.bigint,
   }),
@@ -325,29 +434,12 @@ export const getFeesAccrued = createEffect(
         return [];
       }
 
-      const calls: TraceNode[] = [];
-      collectModifyCalls(trace, calls, pm);
+      const frames = framesFromTrace(trace, pm);
 
       // Usable = the top call did not revert AND at least one modifyLiquidity
       // frame decoded with a full BalanceDelta output.
-      if (!trace?.error && calls.length > 0) {
-        const out: Array<{ salt: string; amount0: bigint; amount1: bigint }> = [];
-        for (const c of calls) {
-          let salt: string;
-          try {
-            const args = decodeFunctionData({
-              abi: MODIFY_LIQ_ABI,
-              data: c.input as `0x${string}`,
-            }).args as readonly [unknown, { salt: string }, unknown];
-            salt = BigInt(args[1].salt).toString();
-          } catch {
-            continue;
-          }
-          // feesAccrued is the SECOND return word: chars 66..130 of the output.
-          const delta = decodeBalanceDelta(BigInt("0x" + (c.output as string).slice(66, 130)));
-          out.push({ salt, amount0: absBig(delta.amount0), amount1: absBig(delta.amount1) });
-        }
-        return out;
+      if (!trace?.error && frames.length > 0) {
+        return frames;
       }
 
       if (attempt < TRACE_MAX_ATTEMPTS - 1) await sleep(TRACE_RETRY_DELAY_MS);

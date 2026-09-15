@@ -192,64 +192,108 @@ export async function readFeeGrowthInside(
 /**
  * Does this event need a `debug_traceTransaction` to learn its collected fee?
  *
- *     gateCanPass && (feeGrowthChanged || liquidityDelta < 0n)
+ *     gateCanPass
  *
- * `gateCanPass` is Ponder's provably-zero skip and is unchanged: a position that
- * does not exist yet, or held no liquidity, cannot have accrued anything, and a
- * degenerate pool's numbers are meaningless.
+ * That is the whole predicate, and the single argument is deliberately still a
+ * named function rather than an inlined boolean: it is the one place that
+ * decides whether a collected fee is MEASURED or silently recorded as zero, and
+ * the two heuristics that used to sit here are exactly the kind that get
+ * reintroduced by a well-meaning "cheap skip" patch. They cannot be
+ * reintroduced now without changing this signature.
  *
- * THE `liquidityDelta < 0n` DISJUNCT IS A DELIBERATE DIVERGENCE FROM PONDER,
- * TAKEN ON AN EXPLICIT USER DECISION, AND IT IS THE FIX RATHER THAN A
- * REGRESSION.
+ * `gateCanPass` is Ponder's provably-zero skip, minus its degenerate-pool
+ * conjunct: see the handler, where it is built, for why a mint provably has no
+ * fees and why dropping the pool guard is right.
  *
- * `feeGrowthChanged` compares the pool's current `feeGrowthInside` against the
- * baseline stored on the position at its last settle, and skips the trace when
- * they are equal on the argument that nothing can have accrued. That argument
- * has one hole, and a full close falls straight into it:
+ * ─── WHAT WAS REMOVED, AND WHY IT HAD TO GO ────────────────────────────────
  *
- *   `getFeeGrowthInside` returns EXACTLY (0, 0) when both of the position's
- *   ticks have been CLEARED — which v4 does when the position was the last
- *   liquidity at those ticks — and the price sits outside the range. That is
- *   precisely the state a full close leaves behind. So on a close the stored
- *   baseline is 0, the fresh read is 0, `feeGrowthChanged` is false, no trace
- *   runs, and the collected fee is silently recorded as ZERO.
+ * The predicate was `gateCanPass && (feeGrowthChanged || liquidityDelta < 0n)`.
+ * Both disjuncts are gone.
  *
- * GROUND TRUTH. Avalanche tokenId 137, WITHDRAW tx
- * 0x283901105bd7a3cfe6227b0283ff38786c1002fbb1fb1c135b63fefa966f8b13 at block
- * 57816979: the trace decodes `feesAccrued = (262354965774593714, 6708203)`
- * while BOTH indexers stored 0, and `callerDelta0 - feesAccrued0` reproduces
- * `withdrawnToken0` to the wei.
+ * 1. `feeGrowthChanged` IS NOT A CONSERVATIVE HEURISTIC — IT IS UNSOUND. It
+ *    compares two quantities that are not comparable. The fresh read is
+ *    POOL-level `feeGrowthInside(poolId, tickLower, tickUpper)` sampled at
+ *    END OF BLOCK; the fee it is being used to predict is determined by the
+ *    POSITION's own `feeGrowthInsideLast` checkpoint, taken MID-TRANSACTION
+ *    when the position last settled. Those two are not the same series and
+ *    nothing forces them to converge:
  *
- * Ponder has the identical defect, so Envio-vs-Ponder parity is structurally
- * blind to it — the two agree on the wrong number. Which is why this diverges
- * on purpose: a parity failure on a decrease is now the expected result.
+ *      - They diverge PERMANENTLY at mint. A position minted into a range that
+ *        already has fee growth takes a non-zero checkpoint, while the baseline
+ *        this indexer stores is whatever the end-of-block read returned. The
+ *        difference never closes, so `feeGrowthChanged` can read false for a
+ *        position's ENTIRE LIFE. Proved on 43114_1356.
+ *      - BLOCK GRANULARITY cannot see accrual inside the settling block. Swaps
+ *        earlier in the same block move `feeGrowthInside` between the position's
+ *        checkpoint and the end-of-block sample; a read at block granularity
+ *        cannot distinguish that from no movement at all. Proved on 43114_378.
  *
- * WHY A DECREASE IS THE RIGHT PLACE TO DROP THE HEURISTIC. In v4 a liquidity
- * DECREASE always returns `feesAccrued`, so `feeGrowthChanged` has nothing
- * useful to add on that path — it can only ever remove a trace that was
- * warranted.
+ *    An earlier version of this docstring asserted the heuristic "keeps in full"
+ *    on the INCREASE path, on the argument that the (0, 0)-from-cleared-ticks
+ *    ambiguity does not arise there. THAT CLAIM IS FALSE, and 43114_3132 in the
+ *    evidence file is the counterexample: it is a fee-bearing POSITIVE-delta
+ *    settlement — 96 of them exist in the audited population — that the
+ *    heuristic skipped. The hole is not about cleared ticks; it is about
+ *    comparing a pool-level end-of-block number against a position-level
+ *    mid-transaction one.
  *
- * THE COST, with the denominator stated. On a 1000-row chain-1 sample the type
- * mix was DEPOSIT 680 / WITHDRAW 226 / COLLECT_FEES 94. Today ~94 of those 1000
- * rows are traced; tracing every decrease takes that to ~226. So it is ~2.4x
- * TOTAL traces per 1000 rows — NOT 2.4x on the decrease path, where the
- * multiplier is much larger because decreases previously traced only when the
- * heuristic fired. Still ~100x below tracing every ModifyLiquidity.
+ * 2. `liquidityDelta < 0n` was the 2024 partial fix for (1) and is false for
+ *    the majority of real settlements: 69.9% of fee-bearing settlements are
+ *    ZERO-delta pure collects, where `< 0n` does not hold.
  *
- * That sample is from the handoff and predates the current 5-chain deployment;
- * treat 2.4x as an order-of-magnitude figure and re-measure the type mix per
- * chain before relying on it for capacity planning. Watch it against
- * getFeesAccrued's own rateLimit of {calls: 20, per: "second"}: if the new
- * volume saturates that window, the sweep queues rather than errors, but the
- * added latency lands inside the serial pass.
+ * MEASURED, against all 1,167 wrong Avalanche positions with every one of their
+ * ~2,062 settlement transactions traced and decoded: this gate change ALONE
+ * still leaves 750 of 1,167 wrong, and the frame-picker fix alone leaves 785
+ * wrong. Both together leave 0. Neither is optional and neither is sufficient.
  *
- * An INCREASE keeps the heuristic in full: there the (0, 0)-from-cleared-ticks
- * ambiguity does not arise the same way, and increases are the bulk of events.
+ * ─── WHAT IT COSTS ─────────────────────────────────────────────────────────
+ *
+ * A trace is per TRANSACTION, not per event: `getFeesAccrued` is keyed on
+ * (chainId, txHash, poolManager) with `cache: true`, so a 15-frame router batch
+ * is ONE trace, every event in it shares that trace, and a resync with a warm
+ * cache pays nothing. Measured over the whole history of chain 43114: +7,381
+ * traces, at most 1.6x. The conjunct that keeps it there is
+ * `existing.liquidity > 0n` inside `gateCanPass` — mints are the bulk of
+ * ModifyLiquidity and they never reach this.
+ *
+ * `getFeeGrowthInside` is still read on every attributable event, and that is
+ * not vestigial: it feeds `feeGrowthInside0/1LastX128` on the Position row,
+ * which the schema exposes and the head sweep diffs against. It is simply no
+ * longer allowed to veto a trace.
  */
-export function shouldTraceFees(args: {
-  readonly gateCanPass: boolean;
-  readonly feeGrowthChanged: boolean;
+export function shouldTraceFees(args: { readonly gateCanPass: boolean }): boolean {
+  return args.gateCanPass;
+}
+
+/**
+ * `gateCanPass` itself — the provably-zero skip, and the ONE detectable case
+ * that must override it.
+ *
+ * Extracted from the handler so that "a mint traces nothing" is a unit test
+ * rather than a claim, and so that `degenerate` is not even in scope to be
+ * re-added: a degenerate pool's TICK MATH is meaningless, but `feesAccrued` is a
+ * return value read from the trace, not tick math, and its collected fee is real
+ * money. The handler still zeroes every tick-derived amount on such a pool.
+ *
+ * WHAT EACH ARGUMENT PROVES.
+ *
+ *  - `hadPosition` / `storedLiquidity > 0n`: a position this indexer has never
+ *    seen, or that held no liquidity, cannot have accrued fees — v4 accrues
+ *    against liquidity. A MINT is exactly this case, which is what keeps the
+ *    positive-delta majority of ModifyLiquidity off the trace path and is why
+ *    the widened gate costs at most 1.6x rather than 100x.
+ *
+ *  - `storedLiquidity === 0n && liquidityDelta < 0n`: impossible on-chain — the
+ *    PoolManager reverts a decrease against a position with no liquidity — so
+ *    seeing it proves the STORE is behind (the handler clamps a negative running
+ *    liquidity to 0 and warns). The skip above would otherwise "prove" no fees
+ *    from a number already known to be wrong, so this forces the trace.
+ */
+export function traceGateCanPass(args: {
+  readonly hadPosition: boolean;
+  readonly storedLiquidity: bigint;
   readonly liquidityDelta: bigint;
 }): boolean {
-  return args.gateCanPass && (args.feeGrowthChanged || args.liquidityDelta < 0n);
+  const storeLiquidityDesynced = args.storedLiquidity === 0n && args.liquidityDelta < 0n;
+  return (args.hadPosition && args.storedLiquidity > 0n) || storeLiquidityDesynced;
 }

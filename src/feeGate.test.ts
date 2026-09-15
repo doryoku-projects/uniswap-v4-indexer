@@ -48,90 +48,56 @@ function evt(over: Partial<FeeGateEvent> = {}): FeeGateEvent {
 
 describe("shouldTraceFees — the gate on the only exact fee source", () => {
   /*
-   * PART B, THE REGRESSION THIS FILE EXISTS FOR.
+   * THE GATE IS NOW ONE CONJUNCT, AND THE TESTS BELOW PIN THAT IT STAYS THAT
+   * WAY.
    *
-   * `getFeeGrowthInside` returns exactly (0, 0) when both of a position's ticks
-   * have been CLEARED — v4 clears them when the position was the last liquidity
-   * there — and the price sits outside the range. That is the state a full
-   * close leaves, so on a close the stored baseline is 0, the fresh read is 0,
-   * `feeGrowthChanged` is false, and the fee was silently recorded as ZERO.
+   * It used to read `gateCanPass && (feeGrowthChanged || liquidityDelta < 0n)`.
+   * Both disjuncts were removed after all 1,167 wrong Avalanche positions were
+   * traced against chain truth: the gate alone left 750 of them wrong, and it
+   * is `feeGrowthChanged` that suppressed those traces.
    *
-   * Ground truth: Avalanche tokenId 137, WITHDRAW tx 0x283901…f8b13 at block
-   * 57816979 — the trace decodes feesAccrued = (262354965774593714, 6708203)
-   * while both indexers stored 0.
+   * `feeGrowthChanged` is not a conservative heuristic — it is UNSOUND. It
+   * compares a POOL-level `feeGrowthInside` sampled at END OF BLOCK against a
+   * fee determined by the POSITION's own MID-TRANSACTION checkpoint. They
+   * diverge permanently at mint (43114_1356) and block granularity cannot see
+   * accrual inside the settling block (43114_378).
+   *
+   * `liquidityDelta < 0n` was the earlier partial fix and is false for the
+   * 69.9% of fee-bearing settlements that are zero-delta pure collects, and for
+   * the 96 fee-bearing POSITIVE-delta frames — 43114_3132 being the
+   * counterexample to the claim, made in the old docstring, that the INCREASE
+   * path was safe.
    */
-  it("TRACES a decrease even when feeGrowthChanged is false", () => {
-    expect(
-      shouldTraceFees({
-        gateCanPass: true,
-        feeGrowthChanged: false,
-        liquidityDelta: -1_000n,
-      }),
-    ).toBe(true);
+  it("traces on gateCanPass ALONE, for every liquidity delta", () => {
+    // The three shapes the old predicate treated differently: a decrease, a
+    // zero-delta pure collect (69.9% of fee-bearing settlements), and an
+    // increase (96 fee-bearing frames). All must trace now.
+    expect(shouldTraceFees({ gateCanPass: true })).toBe(true);
   });
 
-  it("still traces a decrease when feeGrowthChanged is true", () => {
-    expect(
-      shouldTraceFees({
-        gateCanPass: true,
-        feeGrowthChanged: true,
-        liquidityDelta: -1_000n,
-      }),
-    ).toBe(true);
+  it("does NOT trace when gateCanPass is false", () => {
+    // The one surviving conjunct, and the reason this is affordable: a mint has
+    // no prior position and therefore provably no feesAccrued, which keeps the
+    // positive-delta majority off the trace path. Measured cost of the widened
+    // gate over all of chain 43114: +7,381 traces, at most 1.6x.
+    expect(shouldTraceFees({ gateCanPass: false })).toBe(false);
   });
 
-  it("does NOT trace a decrease on a position with no prior liquidity", () => {
-    // `gateCanPass` is unchanged by Part B, and it is the conjunct that keeps
-    // the divergence bounded: a position that does not exist yet, or held no
-    // liquidity, provably accrued nothing, so the extra disjunct must not
-    // resurrect a trace there. This is what stops "trace every decrease".
-    expect(
-      shouldTraceFees({
-        gateCanPass: false,
-        feeGrowthChanged: false,
-        liquidityDelta: -1_000n,
-      }),
-    ).toBe(false);
-    expect(
-      shouldTraceFees({
-        gateCanPass: false,
-        feeGrowthChanged: true,
-        liquidityDelta: -1_000n,
-      }),
-    ).toBe(false);
-  });
-
-  it("does NOT trace an increase whose fee growth did not change", () => {
-    // Increases are the bulk of events and Ponder's heuristic is kept in full
-    // for them. Losing this is the difference between ~226 traces per 1000 rows
-    // and tracing everything.
-    expect(
-      shouldTraceFees({
-        gateCanPass: true,
-        feeGrowthChanged: false,
-        liquidityDelta: 5_000n,
-      }),
-    ).toBe(false);
-  });
-
-  it("does NOT trace a zero-delta collect whose fee growth did not change", () => {
-    // A pure collect is `liquidityDelta === 0`, which is NOT `< 0n`. Nothing
-    // accrued and nothing to discover, so the heuristic still applies.
-    expect(
-      shouldTraceFees({
-        gateCanPass: true,
-        feeGrowthChanged: false,
-        liquidityDelta: 0n,
-      }),
-    ).toBe(false);
-  });
-
-  it("traces an increase or a collect once fee growth HAS changed", () => {
-    for (const liquidityDelta of [0n, 5_000n]) {
-      expect(
-        shouldTraceFees({ gateCanPass: true, feeGrowthChanged: true, liquidityDelta }),
-      ).toBe(true);
-    }
+  it("takes NOTHING but gateCanPass, so the removed heuristics cannot be reintroduced", () => {
+    /*
+     * A TYPE TEST WORTH WRITING. The defect was not that someone chose a bad
+     * predicate once; it is that `feeGrowthChanged` and `liquidityDelta` read
+     * like free, obviously-safe skips, and a future "cheap optimisation" patch
+     * would reach for exactly them again. Removing them from the ARGUMENT TYPE
+     * is what makes that a compile error rather than a silent 750-position
+     * regression, so the argument type is asserted here explicitly.
+     */
+    expect(Object.keys(shouldTraceFees)).toEqual([]);
+    expect(shouldTraceFees.length).toBe(1);
+    // @ts-expect-error — `feeGrowthChanged` must not be accepted any more.
+    expect(shouldTraceFees({ gateCanPass: true, feeGrowthChanged: false })).toBe(true);
+    // @ts-expect-error — nor `liquidityDelta`.
+    expect(shouldTraceFees({ gateCanPass: true, liquidityDelta: 5_000n })).toBe(true);
   });
 });
 
