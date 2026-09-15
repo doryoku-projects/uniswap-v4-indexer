@@ -227,8 +227,8 @@ unchanged and only the runtime differs.
 | Current pooled `amount0`/`amount1`             | `src/utils/positions.ts`                                         | zero RPC                                        |
 | DEPOSIT / WITHDRAW transaction rows            | `src/handlers/modifyLiquidity-handler.ts`                        | zero RPC                                        |
 | Uncollected fees                               | `src/handlers/feeSync-block.ts` + `src/effects/positionState.ts` | one multicall per 400-position chunk, HEAD ONLY |
-| Fee-growth baseline + trace gate               | `src/utils/feeGate.ts` + `src/effects/positionState.ts`          | one cached `eth_call`, issued in the PRELOAD pass |
-| Collected fees + COLLECT_FEES rows             | `src/effects/feesAccrued.ts`                                     | one `debug_traceTransaction` per SETTLING tx and per liquidity DECREASE |
+| Fee-growth baseline (NOT a trace gate)         | `src/utils/feeGate.ts` + `src/effects/positionState.ts`          | one cached `eth_call`, issued in the PRELOAD pass |
+| Collected fees + COLLECT_FEES rows             | `src/effects/feesAccrued.ts` + `src/utils/feeFrames.ts`          | one `debug_traceTransaction` per TRANSACTION that settles a position which held liquidity |
 | Serving the backend                            | the backend's own converter (`backend/src/subgraph/hyperindex/`) | —                                               |
 
 ### Three things that are load-bearing
@@ -337,17 +337,13 @@ was served as a measured zero for every in-range position on every chain. The fi
 definition for several chains this indexer configures (4663 among them) and resolving through
 `client.chain` would have fixed most chains and left those silently throwing.
 
-**Every ModifyLiquidity was traced.** Ponder gates the trace on a three-way AND —
-`existing && prevLiquidity > 0n && feeGrowthChanged` — where the last conjunct compares the
-pool's current `feeGrowthInside` against the baseline stored at the position's last settle.
-Equal means no fee accrued, so `feesAccrued` is provably zero and the trace would learn
-nothing. The port had this as an OR of two weaker conditions, which traced essentially
-everything: one `debug_traceTransaction`, the most expensive call here, per event. It now
-trades that for one cheap cached `getFeeGrowthInside` (`src/utils/feeGate.ts`,
-`shouldTraceFees`). An out-of-range position's fee growth still changes, so it is still traced.
-
-**...but `feeGrowthChanged` is NOT provably-zero on a close, and that lost real fees.**
-See the next section — this is the one place the gate now diverges from Ponder on purpose.
+**Every ModifyLiquidity was traced.** The port gated the trace on an OR of two weak conditions,
+which traced essentially everything: one `debug_traceTransaction`, the most expensive call here,
+per event. The gate is now `gateCanPass` alone — the position must already exist and must have
+held liquidity — which keeps mints, the bulk of `ModifyLiquidity`, off the trace path while
+tracing every real settlement. A trace is per TRANSACTION and cached, so a router batch is one
+trace. See **"Collected fees were wrong for 1,167 Avalanche positions"** below for why the two
+heuristics that used to narrow this further had to be removed rather than tuned.
 
 **Failures were cached, and failed reads never advanced the watermark.** A degraded trace
 returned `[]` under `cache: true`, freezing "no collected fee for this transaction" into the
@@ -509,14 +505,27 @@ The memo is keyed on the effect INPUT, so if the two sites ever built even sligh
 inputs the real pass would miss the dict and pay the round trip anyway — silently, with nothing
 failing. `feeGate` returns the constructed input, so there is one construction, not two.
 
-The same block also warms `Position.get` and `PositionTransaction.getWhere`, which are one
-serialised SELECT each per event in the sequential pass and collapse into grouped queries under
-preload (`UserContext.res.mjs:69,84`).
+The same block also warms `Position.get`, `PositionTransaction.getWhere` and
+`ModifyLiquidity.getWhere` — one serialised SELECT each per event in the sequential pass, which
+collapse into grouped queries under preload (`UserContext.res.mjs:69,84`). The last of the three
+is what the fee-frame ordinal is counted over, so warming it keeps that count out of the serial
+loop; rows written later in the real pass are added to the same in-memory filter index by
+`InMemoryTable.updateIndexes`, so an earlier same-salt event of the same transaction is counted
+whether it was committed or written a moment ago.
 
-**`getFeesAccrued` is deliberately NOT hoisted.** It is gated on the RESULT of
-`getFeeGrowthInside`, so hoisting means tracing speculatively, and at `{calls: 20, per: "second"}`
-those speculative traces would displace real ones in the same rate-limit window for an upside
-capped near 1x.
+**`shouldTraceFees` takes ONE argument, and that is deliberate.** It is the predicate that decides
+whether a collected fee is measured or silently recorded as zero, and the two heuristics that used
+to sit in it were removed from its argument TYPE, not merely from its body — a future "cheap skip"
+patch cannot reintroduce them without changing the signature. `traceGateCanPass` next to it is
+`gateCanPass` itself, extracted from the handler so that "a mint traces nothing" is a unit test
+rather than a claim, and so that pool price state is not even in scope to gate on. Why each of
+those matters is the next section.
+
+**`getFeesAccrued` is deliberately NOT hoisted.** It is gated on the POSITION's stored liquidity,
+which the preload pass does not have — it discards its reads and never reaches the position block.
+Hoisting would therefore trace every transaction speculatively, mints included, and at
+`{calls: 20, per: "second"}` those speculative traces would displace real ones in the same
+rate-limit window for an upside capped near 1x.
 
 **`getFeeGrowthInside`'s rate limit is now load-bearing, and is 500/s.** With the read hoisted,
 the limiter — not RPC latency — is the ceiling on how wide a preload batch can go. `config.yaml`
@@ -530,46 +539,122 @@ cache table's NAME encodes the scope (`Internal.res.mjs:222-228`), so re-scoping
 at a different table and silently orphans every cached row. `rateLimit` is runtime-only and has no
 cache identity, which is why it is the safe knob.
 
-### A full close silently recorded ZERO collected fees — in this indexer AND in Ponder
+### Collected fees were wrong for 1,167 Avalanche positions — TWO independent causes
 
-This is the defect a re-index is being spent on, and it is the one deliberate behavioural
-divergence from the reference.
+This is the defect a re-index is being spent on. It was diagnosed against chain truth over the
+whole affected population: all **1,167** Avalanche positions the deployment
+(`indexer.hyperindex.xyz/bd820cf`) had wrong, all **~2,062** of their settlement transactions
+traced and decoded, **0 unexplained**.
 
-`getFeeGrowthInside` returns **exactly (0, 0)** when both of a position's ticks have been
-CLEARED — which v4 does when the position was the last liquidity at those ticks — and the price
-sits outside the range. That is precisely the state a full close leaves behind. So on a close the
-stored baseline is 0, the fresh read is 0, `feeGrowthChanged` is false, no
-`debug_traceTransaction` runs, and the collected fee is recorded as **zero** with no
-`COLLECT_FEES` row.
+There are TWO causes and they are independent. Fixing either one alone leaves most of the
+population still wrong: **gate-only leaves 750 of 1,167 wrong, picker-only leaves 785. Both leave
+0.**
 
-Ground truth: **Avalanche tokenId 137**, WITHDRAW tx
+#### Cause 1 — the frame picker (the bigger one)
+
+When a PositionManager settles fees, the PoolManager emits **TWO `ModifyLiquidity` events for the
+SAME salt inside one transaction**:
+
+```
+frame 1: liquidityDelta == 0             feesAccrued = ALL THE FEES
+frame 2: liquidityDelta == the real +/-  feesAccrued = (0, 0)
+```
+
+The handler picked its frame with `[...fees].reverse().find(salt)` — LAST-wins — which selects the
+**ZERO** frame. Measured: a zero-fee frame returned in **1,163 of 2,087** cases, and **101/101** of
+the traced multi-event transactions had the fee on the FIRST frame and exactly zero on the last.
+
+**Flipping `.reverse()` is NOT the fix, and that is the trap.** Once the gate below is widened,
+BOTH same-salt events trace, so first-wins attributes the same fee TWICE. Keying on
+`(salt, tickLower, tickUpper, liquidityDelta)` does not work either: tx `0x44e8625d81`
+(position `43114_7842`) has two frames identical in ALL FOUR fields, and **35** transactions have
+two frames identical in salt + ticks + delta.
+
+**So the pairing is ORDINAL** (`src/utils/feeFrames.ts`). `framesFromTrace`
+(`src/effects/feesAccrued.ts`) stamps every `modifyLiquidity` frame with its 0-based index among
+frames of the same salt, in execution order; the handler derives the same ordinal for its own
+event and pairs on it. This is sound because the k-th same-salt LOG is the k-th same-salt call
+FRAME — verified on all 2,062 settlement transactions, matching on
+`(tickLower, tickUpper, liquidityDelta, salt)`, **2062/2062, zero exceptions**.
+
+The handler's ordinal is derived **statelessly**, with no counter anywhere: it counts the
+`ModifyLiquidity` entity rows of this transaction that carry the same `salt` and a **strictly
+lower** `logIndex`. That is why `ModifyLiquidity` now stores `salt` and indexes `transaction`.
+Strictly-lower is what makes it replay-safe — an event's own row cannot change its own answer, the
+same argument as the gas-bearer rule — and using persisted rows rather than an in-memory counter is
+what makes it correct across batch boundaries, restarts, and Envio's two passes (the preload pass
+runs every handler CONCURRENTLY; a shared mutable counter would be a race).
+
+Frames carry their ticks and delta too, as an **integrity check** rather than a key: if the frame
+at this ordinal describes a different call — which can only happen when a pool this indexer skips
+contributes a frame but no row — the handler records **zero** and logs at error. Under-reporting is
+recoverable; double counting is not.
+
+#### Cause 2 — the gate
+
+The gate was `gateCanPass && (feeGrowthChanged || liquidityDelta < 0n)`. It is now `gateCanPass`
+alone, and both removed disjuncts are gone from the ARGUMENT TYPE of `shouldTraceFees` so no
+future caller can reintroduce them.
+
+`feeGrowthChanged` is not a conservative heuristic — it is **unsound**. It compares a **POOL-level**
+`feeGrowthInside` sampled at **END OF BLOCK** against a fee determined by the **POSITION's own
+MID-TRANSACTION** `feeGrowthInsideLast` checkpoint. Those are different series:
+
+- they diverge **permanently at mint**, so the flag can read false for a position's entire life
+  (proved on `43114_1356`);
+- a block-granular read cannot see accrual **inside the settling block** (proved on `43114_378`).
+
+An earlier version of this README claimed the heuristic was safe on the INCREASE path.
+**That claim was false**: `43114_3132` is a fee-bearing positive-delta settlement it skipped, and
+there are 96 such frames in the population.
+
+`liquidityDelta < 0n` was the earlier partial fix and is false for the **69.9%** of fee-bearing
+settlements that are zero-delta pure collects.
+
+`gateCanPass` itself changed in one way and kept two. `!degenerate` was **dropped from the trace
+gate**: a degenerate pool's TICK MATH is meaningless, and every tick-derived amount is still zeroed
+on one, but `feesAccrued` is a RETURN VALUE read from the trace, not tick math, and a degenerate
+pool's collected fee is real money. `hadPosition && liquidity > 0n` is **kept**, and it is what
+makes this affordable — a mint has no prior liquidity so its `feesAccrued` is provably (0, 0), and
+that clause is what keeps the positive-delta majority off the trace path. One case **overrides**
+it: `liquidity === 0n && liquidityDelta < 0n` is impossible on-chain, so observing it proves the
+STORE is behind (the handler clamps a negative running liquidity to 0 and warns) and the trace is
+forced.
+
+Ground truth for one instance: **Avalanche tokenId 137**, WITHDRAW tx
 `0x283901105bd7a3cfe6227b0283ff38786c1002fbb1fb1c135b63fefa966f8b13` at block **57816979**. The
 trace decodes `feesAccrued = (262354965774593714, 6708203)` while BOTH indexers stored 0, and
 `callerDelta0 - feesAccrued0` reproduces `withdrawnToken0` to the wei.
 
-The gate is therefore now:
+#### Cost
 
-```ts
-gateCanPass && (feeGrowthChanged || liquidityDelta < 0n)
-```
+Acceptable, because **a trace is per TRANSACTION, not per event**: `getFeesAccrued` is keyed on
+`(chainId, txHash, poolManager)` with `cache: true`, so a 15-frame router batch is ONE trace and a
+resync with a warm cache is free. Measured over the whole history of chain 43114: **+7,381 traces,
+at most 1.6x**. Widening the effect's output schema does not invalidate anything dangerously: a
+cache row that no longer parses is caught by `LoadLayer.res.mjs:173-187`, logged as "Invalidated
+effect cache", and re-traced.
 
-In v4 a liquidity DECREASE always returns `feesAccrued`, so `feeGrowthChanged` has nothing useful
-to add on that path — it can only remove a trace that was warranted. On an INCREASE the argument
-holds and the heuristic is kept in full. `gateCanPass` is unchanged, so a decrease on a position
-with no prior liquidity still traces nothing.
+#### How it is tested
 
-Cost: about **2.4x TOTAL traces** — ~94 → ~226 per 1000 rows, on a sample whose type mix was
-DEPOSIT 680 / WITHDRAW 226 / COLLECT_FEES 94. Note the denominator: that is the multiplier on all
-traces, not on the decrease path, where it is much larger. Still ~100x below tracing every
-`ModifyLiquidity`. The sample predates the 5-chain deployment — re-measure per chain before using
-it for capacity planning, and watch it against `getFeesAccrued`'s `{calls: 20, per: "second"}`.
+- `src/feeFramePairing.test.ts` — every settlement shape in the population (`[0,-]` 661 txs,
+  `[-]` 380, `[0,+]` 182, `[0,0]` 35, `[0]` 5, `[+]` 1), the "a mint traces nothing" gate, and the
+  invariant that matters: **the fees attributed across the same-salt events of one transaction sum
+  to exactly the fees in that transaction's frames — no more, no less.**
+- `src/feeReplay.test.ts` — 18 real positions from the audit (both `MISSED_ALL` and `PARTIAL`),
+  their 38 real settlement transactions replayed from real archive-node traces, asserting the
+  attributed totals equal `expected_collected_token0/1`. It also asserts log order === frame order
+  on real data (58 logs, 58 frames), and shows both wrong pickers failing on that same data.
+  Fixture: `src/fixtures/avalanche-settlement-traces.json`, regenerated by
+  `scripts/build-fee-replay-fixture.mjs <audit.csv>`.
 
-**This DIVERGES FROM PONDER on purpose, per an explicit user decision.** Ponder has the identical
-defect, so Envio-vs-Ponder parity is structurally blind to it — the two agree on the wrong number.
-A parity failure on a decrease is now the EXPECTED result and the divergence is the fix working,
-not a regression. `scripts/diff-collected-fees.mjs` should be read with that in mind: this port
-reporting MORE collected fees than Ponder on a close is the classifier's existing
-"Ponder LOW" case and remains correct.
+**This DIVERGES FROM PONDER on purpose.** Ponder has the same `feeGrowthChanged` gate and the same
+salt-keyed frame collapse (`core/fees-trace.ts:116` builds a Map keyed by salt, which keeps the
+last frame), so Envio-vs-Ponder parity is structurally blind to both causes — the two agree on the
+wrong number. A parity failure on a settlement is now the EXPECTED result and the divergence is the
+fix working. `scripts/diff-collected-fees.mjs` should be read with that in mind: this port
+reporting MORE collected fees than Ponder is the classifier's existing "Ponder LOW" case and
+remains correct.
 
 ### Validating against Ponder and the subgraph
 

@@ -16,10 +16,12 @@ import {
   tokenIdFromSalt,
 } from "../utils/positions";
 import { getFeesAccrued } from "../effects/feesAccrued";
+import { pickFeeFrame, saltOrdinal } from "../utils/feeFrames";
 import {
   feeGate,
   readFeeGrowthInside,
   shouldTraceFees,
+  traceGateCanPass,
   type FeeGateEvent,
 } from "../utils/feeGate";
 import { positionManagerFor } from "../utils/v4Addresses";
@@ -137,10 +139,14 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
      * utils/intervalUpdates.ts:159-171 — the point is the side effect on the
      * load layer and the effect output dict, which the real pass reads back.
      *
-     * `getFeesAccrued` is deliberately NOT hoisted. It is gated on the RESULT of
-     * `getFeeGrowthInside`, so hoisting it means tracing speculatively, and at
-     * {calls: 20, per: "second"} those speculative traces would displace real
-     * ones in the same rate-limit window for an upside capped near 1x.
+     * `getFeesAccrued` is deliberately NOT hoisted, and the reason CHANGED with
+     * the gate. It used to be gated on the RESULT of `getFeeGrowthInside`; it is
+     * now gated on the POSITION's stored liquidity, which this pass does not
+     * have — the preload pass discards its reads and never reaches the position
+     * block below. Hoisting it would therefore trace every transaction
+     * speculatively, mints included, and mints are the bulk of ModifyLiquidity.
+     * At {calls: 20, per: "second"} those speculative traces would displace real
+     * ones in the same rate-limit window, for an upside capped near 1x.
      */
     const gate = feeGate(feeGateEvent);
     await Promise.all([
@@ -159,6 +165,18 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
       gate.attributable
         ? context.PositionTransaction.getWhere({
             txHash: { _eq: event.transaction.hash },
+          })
+        : undefined,
+      // Same story, and it is the input the fee-frame ORDINAL is counted over.
+      // Warming it here means the real pass reads the filter index out of memory
+      // (`LoadLayer.res.mjs:242` short-circuits on `hasIndex`) instead of issuing
+      // a SELECT inside the serial loop. The index is rebuilt from the DB, and
+      // rows SET later in the real pass are added to it by
+      // `InMemoryTable.updateIndexes`, so an earlier same-salt event of this
+      // transaction is counted whether it was committed or written a moment ago.
+      gate.attributable
+        ? context.ModifyLiquidity.getWhere({
+            transaction: { _eq: event.transaction.hash },
           })
         : undefined,
       gate.tokenId !== undefined
@@ -340,6 +358,12 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
     token1_id: token1.id,
     sender: event.params.sender,
     origin: event.transaction.from || "NONE",
+    // The event's sixth parameter, which this row used to drop. It is what makes
+    // the fee-frame ORDINAL countable — see `saltOrdinal` below — so this write
+    // is load-bearing for collected fees, not bookkeeping. Written here, before
+    // the position block, and therefore visible to every LATER event of the same
+    // transaction in the serial pass.
+    salt: event.params.salt,
     amount: event.params.liquidityDelta,
     amount0: amount0,
     amount1: amount1,
@@ -521,37 +545,58 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
     // at once so a batched multi-position tx costs one trace.
     //
     /*
-     * PONDER'S FREE TRACE-SKIP, which is the difference between tracing every
-     * ModifyLiquidity and tracing only the ones that settled a fee.
+     * THE ONLY REMAINING TRACE SKIP, and every conjunct in it is a PROOF rather
+     * than a heuristic.
      *
-     * Ponder gates the trace on a three-way AND (apps/v4/src/index.ts:222):
+     *     (hadPosition && existing.liquidity > 0n) || storeLiquidityDesynced
      *
-     *     existing && prevLiquidity > 0n && feeGrowthChanged
+     * `hadPosition && existing.liquidity > 0n` is Ponder's provably-zero skip
+     * (apps/v4/src/index.ts:222), and it is what makes this whole change
+     * affordable: a MINT has no prior position and therefore no prior liquidity,
+     * so `feesAccrued` on it is provably (0, 0) — there is nothing for a trace
+     * to discover. Mints are the bulk of ModifyLiquidity events, and this clause
+     * is what keeps the positive-delta majority off the trace path entirely.
+     * Measured over the whole history of chain 43114, the widened gate adds
+     * 7,381 traces, at most 1.6x, because a trace is per TRANSACTION and cached.
      *
-     * where `feeGrowthChanged` compares the pool's CURRENT `feeGrowthInside`
-     * against the baseline stored on the position at its last settle. If they
-     * are equal, no fee has accrued since that settle, so `feesAccrued` is
-     * provably zero and there is nothing for a trace to discover. The other two
-     * conjuncts are the same argument: a position that does not exist yet, or
-     * held no liquidity, cannot have accrued anything.
+     * `!degenerate` IS DELIBERATELY NOT HERE, and that is a change. A degenerate
+     * pool is one parked at the edge of the representable tick domain, where the
+     * tick FORMULAS produce astronomical nonsense — so its computed amounts are
+     * zeroed, below and in the sweep, and they stay zeroed. But `feesAccrued` is
+     * not computed from ticks: it is a RETURN VALUE read out of the call trace,
+     * and a degenerate pool's collected fee is real money that really moved.
+     * Zeroing it because the pool's PRICE is unusable confuses two different
+     * quantities.
      *
-     * Ponder claims it only ever skips provably-zero cases. THAT CLAIM IS
-     * FALSE ON A DECREASE, and `shouldTraceFees` below no longer relies on it
-     * there — see its docstring in utils/feeGate.ts for the (0, 0)-from-cleared-
-     * ticks hole and the Avalanche tokenId 137 ground truth. On an INCREASE the
-     * argument holds and the heuristic is kept in full.
-     *
-     * An out-of-range position's fee growth still CHANGES, so it is still
-     * traced and still exact, which is why this is not the out-of-range
-     * shortcut the port previously used.
-     *
-     * The port had this as an OR of two conditions, which traced essentially
-     * every event: one `debug_traceTransaction` per ModifyLiquidity, the most
-     * expensive call in the indexer, against a rate limit. This trades it for
-     * one `getFeeGrowthInside` eth_call, which is cheap and cached.
+     * Ponder's `feeGrowthChanged` third conjunct is gone entirely — see
+     * `shouldTraceFees` in utils/feeGate.ts. In one line: it compares a
+     * POOL-level `feeGrowthInside` sampled at END OF BLOCK against a fee
+     * determined by the POSITION's own MID-TRANSACTION checkpoint, and those
+     * diverge permanently at mint (43114_1356), so it can read false for a
+     * position's entire life.
      */
     const hadPosition = existing.poolId !== "";
-    const gateCanPass = !degenerate && hadPosition && existing.liquidity > 0n;
+
+    /*
+     * A DETECTABLE DESYNC, which must trace even though the skip above says it
+     * cannot have fees.
+     *
+     * The clamp at the top of this block exists because a negative running
+     * liquidity means a missed or out-of-order event. When that has happened,
+     * `existing.liquidity` is 0 while the chain's position still holds
+     * liquidity, and the skip would then "prove" a settlement has no fees using
+     * a number already known to be wrong.
+     *
+     * `existing.liquidity === 0n && liquidityDelta < 0n` is IMPOSSIBLE on-chain
+     * — the PoolManager cannot remove liquidity from a position that has none;
+     * it reverts — so observing it is proof the STORE is behind, not proof about
+     * the position. Trace it.
+     */
+    const gateCanPass = traceGateCanPass({
+      hadPosition,
+      storedLiquidity: existing.liquidity,
+      liquidityDelta: delta,
+    });
 
     /*
      * THE SAME CALL THE PRELOAD BLOCK ABOVE ALREADY MADE, with the same
@@ -577,18 +622,25 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
      * is indistinguishable from the genuine (0, 0) that a cleared tick pair
      * reports on the eventual close. Measured on Avalanche tokenId 1097 and
      * Arbitrum tokenIds 268 and 771.
+     *
+     * WHAT THIS READ IS STILL FOR, now that it no longer gates the trace. It
+     * feeds `feeGrowthInside0/1LastX128` on the Position row, which the schema
+     * exposes and the head sweep diffs against to value UNCOLLECTED fees. What
+     * it must never again do is decide whether a COLLECTED fee gets measured:
+     * it is a pool-level, end-of-block number, and the fee it was being used to
+     * predict is set by the position's own mid-transaction checkpoint.
      */
     const fgNow = await readFeeGrowthInside(context, feeGateEvent);
 
-    // A FAILED read is not "unchanged". Treating it as unchanged would skip the
-    // trace and silently record no collected fee, so an unknown answer forces
-    // the trace — the direction that cannot fabricate a zero.
-    const feeGrowthChanged =
-      !!fgNow &&
-      (!fgNow.ok ||
-        fgNow.feeGrowthInside0X128 !== existing.feeGrowthInside0LastX128 ||
-        fgNow.feeGrowthInside1X128 !== existing.feeGrowthInside1LastX128);
-
+    /*
+     * THE READ SURVIVES; THE COMPARISON DOES NOT. `feeGrowthChanged` used to be
+     * derived here and fed to `shouldTraceFees`. It is gone: comparing this
+     * POOL-level, END-OF-BLOCK read against the POSITION's own MID-TRANSACTION
+     * checkpoint is unsound in both directions, and it silently suppressed the
+     * trace for 750 of the 1,167 wrong Avalanche positions.
+     *
+     * `fgNow` itself is still needed, for the two baseline columns below.
+     */
     // Re-baseline to what the pool reports now, so the next event's comparison
     // is against this settle. Ponder advances this even when the trace fails,
     // so accounting stays consistent and only that one collect is under-counted.
@@ -598,39 +650,94 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
     let settled0 = ZERO_BD;
     let settled1 = ZERO_BD;
     /*
-     * `gateCanPass && (feeGrowthChanged || liquidityDelta < 0n)`.
-     *
-     * The disjunct is the reason a re-index is being spent, and the full
-     * argument — including the Avalanche tokenId 137 ground truth and why this
-     * DIVERGES FROM PONDER on purpose — is on `shouldTraceFees` in
-     * utils/feeGate.ts. In one line: `getFeeGrowthInside` returns exactly (0, 0)
-     * from a CLEARED tick pair, which is the state a full close leaves, so on a
-     * close the baseline and the fresh read are both 0, `feeGrowthChanged` is
-     * false, and the collected fee was silently recorded as ZERO. A v4 liquidity
-     * decrease always returns `feesAccrued`, so the heuristic has nothing useful
-     * to add on that path and is dropped there.
+     * The gate is now `gateCanPass` alone — the full argument for why the two
+     * heuristics that used to guard it are UNSOUND rather than merely
+     * conservative is on `shouldTraceFees` in utils/feeGate.ts.
      */
-    if (
-      shouldTraceFees({
-        gateCanPass,
-        feeGrowthChanged,
-        liquidityDelta: event.params.liquidityDelta,
-      })
-    ) {
-      const fees = await context.effect(getFeesAccrued, {
+    if (shouldTraceFees({ gateCanPass })) {
+      const [fees, modifyRowsThisTx] = await Promise.all([
+        context.effect(getFeesAccrued, {
+          chainId: event.chainId,
+          txHash: event.transaction.hash,
+          poolManager: chainConfig.poolManagerAddress,
+        }),
+        // Warmed by the preload block above, so this resolves from the
+        // in-memory filter index rather than a SELECT in the serial loop.
+        context.ModifyLiquidity.getWhere({ transaction: { _eq: event.transaction.hash } }),
+      ]);
+
+      /*
+       * ORDINAL PAIRING. THE defect this change exists for.
+       *
+       * A settlement emits TWO ModifyLiquidity events for the SAME salt in one
+       * transaction — the first carrying all the fees with `liquidityDelta == 0`,
+       * the second carrying (0, 0) with the real delta. The old
+       * `[...fees].reverse().find(salt)` picked the LAST, i.e. the zero, in
+       * 1,163 of 2,087 measured cases. Flipping it to first-wins is NOT the fix:
+       * with the gate widened both events trace, and first-wins would attribute
+       * the same fee TWICE.
+       *
+       * So the pairing is by per-salt ORDINAL, and the ordinal is derived from
+       * committed facts rather than a counter: how many ModifyLiquidity rows of
+       * this transaction carry this salt and a STRICTLY LOWER log index. The
+       * k-th same-salt LOG is the k-th same-salt call FRAME — verified on all
+       * 2,062 Avalanche settlement transactions, 2062/2062, matching on
+       * (tickLower, tickUpper, liquidityDelta, salt).
+       *
+       * Why strictly-lower and not a counter, and why the entity rather than the
+       * PositionTransaction rows already fetched for gas: see `saltOrdinal` in
+       * utils/feeFrames.ts. The short version is that the entity is written for
+       * EVERY ModifyLiquidity, whatever the caller and whatever it settled,
+       * which is exactly the set the trace's frame list contains — while a
+       * PositionTransaction row is written only when something was settled, so
+       * counting those would miscount a zero-fee first frame and hand its
+       * successor the WRONG frame.
+       */
+      const frameKey = {
         chainId: event.chainId,
-        txHash: event.transaction.hash,
-        poolManager: chainConfig.poolManagerAddress,
-      });
-      // LAST match, not first. The effect returns one entry per
-      // modifyLiquidity frame, and a transaction can legitimately contain two
-      // frames for the same salt; Ponder collects them into a Map keyed by salt
-      // (core/fees-trace.ts:116), so a repeated salt resolves to the last
-      // frame. `.find` took the first, which is a different number.
-      const mine = [...fees].reverse().find((f) => f.salt === tokenId.toString());
-      if (mine) {
-        settled0 = convertTokenToDecimal(mine.amount0, token0.decimals);
-        settled1 = convertTokenToDecimal(mine.amount1, token1.decimals);
+        salt: event.params.salt,
+        logIndex: event.logIndex,
+        tickLower: event.params.tickLower,
+        tickUpper: event.params.tickUpper,
+        liquidityDelta: delta,
+      };
+      const ordinal = saltOrdinal(modifyRowsThisTx, frameKey);
+      const pick = pickFeeFrame(fees, frameKey, ordinal);
+
+      if (pick.status === "matched") {
+        settled0 = convertTokenToDecimal(pick.frame.amount0, token0.decimals);
+        settled1 = convertTokenToDecimal(pick.frame.amount1, token1.decimals);
+      } else if (pick.status === "mismatched") {
+        /*
+         * LOUD, because it is the only way the ordinal can be wrong and it is
+         * silent otherwise. The frame at this ordinal describes a different
+         * call, which means the log sequence this indexer saw and the frame
+         * sequence in the trace have drifted — a pool skipped by
+         * `chainConfig.poolsToSkip`, or one with no row yet, writes no
+         * ModifyLiquidity entity while its call frame is still in the trace.
+         * Record ZERO rather than a frame that is somebody else's money:
+         * under-reporting is recoverable, double counting is not.
+         */
+        context.log.error(
+          `Fee frame ordinal mismatch on chain ${event.chainId} tx ` +
+            `${event.transaction.hash} logIndex ${event.logIndex}: frame ` +
+            `${ordinal} for salt ${tokenId} describes ` +
+            `(${pick.frame.tickLower}, ${pick.frame.tickUpper}, ` +
+            `${pick.frame.liquidityDelta}) but the event is ` +
+            `(${event.params.tickLower}, ${event.params.tickUpper}, ${delta}) — ` +
+            `recording 0 collected fees for this event rather than risk ` +
+            `attributing another position's fee.`,
+        );
+      } else {
+        // NOT an error. No frame at this ordinal is the ordinary shape of a
+        // degraded trace (the effect returns [] and warns on its own), of a
+        // transaction whose salt no frame carries, and of a settlement with
+        // more same-salt logs than frames. Zero is the right answer and the
+        // handler has nothing to add at warn level.
+        context.log.debug(
+          `No fee frame at ordinal ${ordinal} for salt ${tokenId} in tx ` +
+            `${event.transaction.hash} (${fees.length} frames) — 0 collected fees`,
+        );
       }
     }
 

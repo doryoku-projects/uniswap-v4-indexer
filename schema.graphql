@@ -299,13 +299,26 @@ type ModifyLiquidity
   @index(fields: ["pool", "transaction"]) {
   id: ID!
   chainId: BigInt!
-  transaction: String! # Instead of Transaction reference
+  # Indexed because the fee-frame ORDINAL is derived from it: the handler counts
+  # the rows of THIS transaction that carry the same `salt` and a strictly lower
+  # `logIndex`, and that count is which same-salt `modifyLiquidity` call frame in
+  # the transaction's call trace this event is. See the ORDINAL FRAME PAIRING
+  # note in handlers/modifyLiquidity-handler.ts. Declared here rather than left
+  # to `ensureQueryIndexes`, which would build it lazily on a hot table and pause
+  # writes while it does.
+  transaction: String! @index # Instead of Transaction reference
   timestamp: BigInt! @index
   pool: Pool! # Instead of Pool reference
   token0: Token! # Token reference like in Swap entity
   token1: Token! # Token reference like in Swap entity
   sender: String! # Instead of Bytes
   origin: String! # Instead of Bytes - the EOA that initiated the txn
+  # The sixth ModifyLiquidity parameter, which the entity used to drop. It is
+  # the position key's salt — the NFT tokenId when the caller is the
+  # PositionManager — and it is what makes the ordinal above countable: without
+  # it, two positions settled by one router transaction are indistinguishable
+  # rows.
+  salt: String!
   amount: BigInt! # amount of liquidity modified
   amount0: BigDecimal! # amount of token 0 modified
   amount1: BigDecimal! # amount of token 1 modified
