@@ -73,18 +73,47 @@ import { feeSweepChainIds } from "../utils/v4Addresses";
 import { activeChainIds } from "../utils/chains";
 
 /**
- * Blocks between sweeps, per chain — chosen to land near one hour, matching
- * Ponder's `feeSyncIntervalBlocks` so the refresh cadence is unchanged.
+ * Blocks between sweeps, per chain — every chain targets **45 minutes**.
+ *
+ * `blocks = round(2700 / blockTime)`, with each chain's block time measured
+ * rather than assumed (see the per-line comments). A uniform wall-clock cadence
+ * is the point: the previous table mixed 21, 30, 33 and 60-minute targets, so
+ * how stale an uncollected-fee figure could be depended on which chain a
+ * position happened to be on.
+ *
+ * THIS DEVIATES FROM PONDER on two chains, deliberately. Arbitrum (8000, ~33
+ * min) and Avalanche (1200, ~21 min) carried Ponder's `feeSyncIntervalBlocks`
+ * verbatim; they now sweep at 45 minutes like everything else. Ponder's values
+ * were a cadence choice, not a correctness one, so parity costs nothing here.
  *
  * Unlike Ponder's, `_every` alignment is deterministic relative to the start
  * block, so the phase does not re-anchor on every process restart.
+ *
+ * Linea is the one chain where 45 minutes is an average rather than a bound —
+ * its cadence swings between roughly 5.5 s and 9.0 s per block, so the interval
+ * uses a 200,000-block mean of 8.6954 s and individual sweeps land anywhere from
+ * ~29 to ~47 minutes apart. More frequent sweeps only cost RPC, so the fast end
+ * is harmless.
  */
 const SWEEP_INTERVAL_BLOCKS: Readonly<Record<number, number>> = {
-  1: 300, // ~12.05s blocks → 60.2 min
-  10: 1800, // ~2s → 60 min
-  42161: 8000, // ~0.25s → 33 min (Ponder's value)
-  43114: 1200, // ~1.06s → 21 min (Ponder's value)
-  4663: 36000, // ~0.1s → 60.1 min
+  1: 224, // ethereum ~12.05s -> 45 min
+  10: 1350, // optimism ~2.0s -> 45 min
+  56: 6000, // bnb chain ~0.45s -> 45 min
+  130: 2700, // unichain ~1.0s -> 45 min
+  137: 1800, // polygon ~1.5s -> 45 min
+  143: 8911, // monad ~0.303s -> 45 min
+  480: 1350, // world chain ~2.0s -> 45 min
+  1868: 1350, // soneium ~2.0s -> 45 min
+  4326: 2700, // megaeth ~1.0s -> 45 min
+  4663: 27000, // robinhood ~0.1s -> 45 min
+  8453: 1350, // base ~2.0s -> 45 min
+  42161: 10800, // arbitrum ~0.25s -> 45 min
+  42220: 2700, // celo ~1.0s -> 45 min
+  43114: 2547, // avalanche ~1.06s -> 45 min
+  57073: 2700, // ink ~1.0s -> 45 min
+  59144: 311, // linea ~8.6954s -> 45 min
+  81457: 1350, // blast ~2.0s -> 45 min
+  7777777: 1350, // zora ~2.0s -> 45 min
 };
 
 /**

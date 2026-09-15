@@ -16,8 +16,26 @@
  * returns an empty position, which reads as zero fees rather than an error —
  * the kind of mistake that produces plausible wrong numbers.
  *
- * A chain absent here cannot have its fees swept. That is deliberate and it
- * fails loudly at the call site rather than silently reading address zero.
+ * COVERAGE: every chain in `config.yaml` has an entry — all 18, commented-out
+ * ones included — so uncommenting a chain is sufficient and no longer silently
+ * disables its fee reads. Each `stateView` was verified on-chain rather than
+ * copied: 3,531 bytes of code, a non-reverting `getFeeGrowthInside`
+ * (0x53e9c1fb) answer, a revert on a bogus selector (proving real dispatch
+ * rather than a fallback), and — the decisive check — `StateView.poolManager()`
+ * equal to the same chain's `PositionManager.poolManager()`.
+ *
+ * ADDING A CHAIN: add it HERE and to `SWEEP_INTERVAL_BLOCKS` in
+ * `handlers/feeSync-block.ts` at the same time. A missing entry does not fail
+ * loudly. `v4AddressesFor(id)?.stateView ?? ""` resolves to the EMPTY STRING and
+ * every read goes out as `eth_call {"to": ""}`; it fails open, so fees stay
+ * correct, but each event pays a doomed round trip and
+ * `feeGrowthInside0/1LastX128` never advances. Missing from EITHER table also
+ * makes `feeSync-block.ts`'s `where` return false, so the uncollected-fee sweep
+ * never registers and `totalFeesUncollected0/1` stay frozen at zero.
+ *
+ * Ink (57073), Soneium (1868) and Arbitrum (42161) share a StateView address.
+ * That is a deterministic deploy, not a copy-paste error — each was verified
+ * independently on its own chain.
  */
 
 /**
@@ -57,6 +75,24 @@ const V4_ADDRESSES: Readonly<Record<number, V4Addresses>> = {
     multicall3: MULTICALL3,
     positionManager: "0x3c3ea4b57a46241e54610e5f022e5c45859a1017",
   },
+  // base
+  //
+  // Added after chain 8453 was uncommented in config.yaml without a matching
+  // entry here. `v4AddressesFor(8453)?.stateView ?? ""` then resolved to the
+  // EMPTY STRING and every read went out as `eth_call {"to": ""}`, which the
+  // node rejects with "Invalid params". It fails OPEN — `ok: false` reads as
+  // "unknown" and forces the trace — so no fee was lost, but every qualifying
+  // Base event paid a doomed round trip and `feeGrowthInside0/1LastX128` never
+  // advanced, since those are only written when the read succeeds.
+  //
+  // Verified against the exact call that was failing (pool 0x4a9e36de…,
+  // ticks 57800/58800, block 25707086): this address has 7,064 bytes of code
+  // and returns real fee growth where "" returned Invalid params.
+  8453: {
+    stateView: "0xa3c0c9b65bad0b08107aa264b0f3db444b867a71",
+    multicall3: MULTICALL3,
+    positionManager: "0x7c5f5a4bbd8fd63184577525326123b519429bdc",
+  },
   // arbitrum one
   42161: {
     stateView: "0x76fd297e2d437cd7f76d50f01afe6160f86e9990",
@@ -68,6 +104,78 @@ const V4_ADDRESSES: Readonly<Record<number, V4Addresses>> = {
     stateView: "0xc3c9e198c735a4b97e3e683f391ccbdd60b69286",
     multicall3: MULTICALL3,
     positionManager: "0xb74b1f14d2754acfcbbe1a221023a5cf50ab8acd",
+  },
+  // bnb chain
+  56: {
+    stateView: "0xd13dd3d6e93f276fafc9db9e6bb47c1180aee0c4",
+    multicall3: MULTICALL3,
+    positionManager: "0x7a4a5c919ae2541aed11041a1aeee68f1287f95b",
+  },
+  // unichain
+  130: {
+    stateView: "0x86e8631a016f9068c3f085faf484ee3f5fdee8f2",
+    multicall3: MULTICALL3,
+    positionManager: "0x4529a01c7a0410167c5740c487a8de60232617bf",
+  },
+  // polygon
+  137: {
+    stateView: "0x5ea1bd7974c8a611cbab0bdcafcb1d9cc9b3ba5a",
+    multicall3: MULTICALL3,
+    positionManager: "0x1ec2ebf4f37e7363fdfe3551602425af0b3ceef9",
+  },
+  // monad
+  143: {
+    stateView: "0x77395f3b2e73ae90843717371294fa97cc419d64",
+    multicall3: MULTICALL3,
+    positionManager: "0x5b7ec4a94ff9bedb700fb82ab09d5846972f4016",
+  },
+  // world chain
+  480: {
+    stateView: "0x51d394718bc09297262e368c1a481217fdeb71eb",
+    multicall3: MULTICALL3,
+    positionManager: "0xc585e0f504613b5fbf874f21af14c65260fb41fa",
+  },
+  // soneium
+  1868: {
+    stateView: "0x76fd297e2d437cd7f76d50f01afe6160f86e9990",
+    multicall3: MULTICALL3,
+    positionManager: "0x1b35d13a2e2528f192637f14b05f0dc0e7deb566",
+  },
+  // megaeth
+  4326: {
+    stateView: "0x726f84e1dfb8d375a365e0808282f40d52d3e4e8",
+    multicall3: MULTICALL3,
+    positionManager: "0x9ae0921e981aaa7308f176f8d4f9129b9247c89d",
+  },
+  // zora
+  7777777: {
+    stateView: "0x385785af07d63b50d0a0ea57c4ff89d06adf7328",
+    multicall3: MULTICALL3,
+    positionManager: "0xf66c7b99e2040f0d9b326b3b7c152e9663543d63",
+  },
+  // celo
+  42220: {
+    stateView: "0xbc21f8720babf4b20d195ee5c6e99c52b76f2bfb",
+    multicall3: MULTICALL3,
+    positionManager: "0xf7965f3981e4d5bc383bfbcb61501763e9068ca9",
+  },
+  // ink
+  57073: {
+    stateView: "0x76fd297e2d437cd7f76d50f01afe6160f86e9990",
+    multicall3: MULTICALL3,
+    positionManager: "0x1b35d13a2e2528f192637f14b05f0dc0e7deb566",
+  },
+  // linea
+  59144: {
+    stateView: "0xe861de206e460a8b936b05ad3816520b58ccdf9b",
+    multicall3: MULTICALL3,
+    positionManager: "0xddcad5775b2816a87495f207731b3571d7ee3c76",
+  },
+  // blast
+  81457: {
+    stateView: "0x12a88ae16f46dce4e8b15368008ab3380885df30",
+    multicall3: MULTICALL3,
+    positionManager: "0x4ad2f4cca2682cbb5b950d660dd458a1d3f1baad",
   },
   // robinhood chain
   4663: {
@@ -81,9 +189,9 @@ const V4_ADDRESSES: Readonly<Record<number, V4Addresses>> = {
  * Addresses for a chain, or `undefined` when the fee sweep is not configured
  * for it.
  *
- * Envio's `config.yaml` covers considerably more chains than Ponder's
- * `networks.json` does, so most chains legitimately have no entry — the sweep
- * skips them rather than guessing.
+ * Every chain in `config.yaml` now has an entry, so in practice this returns
+ * `undefined` only for a chain nobody has added to the config yet — which is
+ * exactly when the sweep should skip rather than guess.
  */
 export function v4AddressesFor(chainId: number): V4Addresses | undefined {
   return V4_ADDRESSES[chainId];
