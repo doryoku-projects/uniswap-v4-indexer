@@ -4,7 +4,40 @@ import { getChainConfig } from "./chains";
 import { getRpcUrl } from "./rpc";
 import { createEffect, S, type Address, type EvmChainId } from "envio";
 
-const ERC20_ABI = [
+/*
+ * The bytes32 variant of `name()` / `symbol()`, as a SEPARATE ABI.
+ *
+ * Tokens minted before the ERC-20 string convention settled return `bytes32`
+ * from the SAME selectors — `name()` 0x06fdde03 and `symbol()` 0x95d89b41. MKR
+ * (0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2) is the canonical example and is
+ * in mainnet's `whitelistTokens`.
+ *
+ * WHY A SECOND ABI RATHER THAN TWO ENTRIES IN ONE. This previously declared the
+ * fallback as `name: "NAME"` / `name: "SYMBOL"` inside `ERC20_ABI`, and viem
+ * derives the selector from that STRING — so it called `NAME()` (0xa3f4df7e)
+ * and `SYMBOL()` (0xf76f8d78), which no token implements. Both reverted, so the
+ * fallback never fired for ANY token and MKR indexed as `unknown`/`UNKNOWN`.
+ * Two entries with the same name and different outputs cannot coexist in one
+ * viem ABI, hence the split.
+ */
+export const ERC20_BYTES32_ABI = [
+  {
+    inputs: [],
+    name: "name",
+    outputs: [{ type: "bytes32" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "symbol",
+    outputs: [{ type: "bytes32" }],
+    stateMutability: "view",
+    type: "function",
+  },
+] as const;
+
+export const ERC20_ABI = [
   {
     inputs: [],
     name: "name",
@@ -14,22 +47,8 @@ const ERC20_ABI = [
   },
   {
     inputs: [],
-    name: "NAME",
-    outputs: [{ type: "bytes32" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
     name: "symbol",
     outputs: [{ type: "string" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "SYMBOL",
-    outputs: [{ type: "bytes32" }],
     stateMutability: "view",
     type: "function",
   },
@@ -177,13 +196,19 @@ export async function fetchTokenMetadataMulticall(
     abi: ERC20_ABI,
     client,
   });
+  // Same selectors, bytes32 return — see ERC20_BYTES32_ABI.
+  const bytes32Contract = getContract({
+    address,
+    abi: ERC20_BYTES32_ABI,
+    client,
+  });
 
   // Use `null` for failed reads so we can distinguish "read failed" from
   // "read succeeded with a valid empty/zero value".
   const namePromise = contract.read.name().catch(() => null);
-  const nameBytes32Promise = contract.read.NAME().catch(() => null);
+  const nameBytes32Promise = bytes32Contract.read.name().catch(() => null);
   const symbolPromise = contract.read.symbol().catch(() => null);
-  const symbolBytes32Promise = contract.read.SYMBOL().catch(() => null);
+  const symbolBytes32Promise = bytes32Contract.read.symbol().catch(() => null);
   const decimalsPromise = contract.read.decimals().catch(() => null);
 
   const [
