@@ -23,6 +23,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { ERC20_ABI, ERC20_BYTES32_ABI } from "./utils/tokenMetadata";
+import { toFunctionSelector } from "viem";
 
 const ADDRESS = "0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42" as const;
 const CHAIN = 42161;
@@ -232,5 +234,65 @@ describe("the removed mechanisms stay removed", () => {
   it("issues no eth_getCode from the metadata path", () => {
     const src = readFileSync("src/utils/tokenMetadata.ts", "utf8") as string;
     expect(src).not.toMatch(/getCode/);
+  });
+});
+
+describe("bytes32 name/symbol — the fallback that never fired", () => {
+  /*
+   * MKR (0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2, in mainnet's
+   * whitelistTokens) predates the ERC-20 string convention and returns bytes32
+   * from `name()` and `symbol()`. The fallback for that existed but was declared
+   * inside ERC20_ABI as `name: "NAME"` / `name: "SYMBOL"` — and viem derives the
+   * selector from that STRING, so it called NAME() (0xa3f4df7e) and SYMBOL()
+   * (0xf76f8d78), which no token implements. Both reverted, so the fallback
+   * never fired for ANY token and MKR indexed as unknown/UNKNOWN with
+   * `context.cache = false`, i.e. re-read every run and never able to succeed.
+   *
+   * THIS IS A SELECTOR TEST ON PURPOSE. The suite passed happily with the broken
+   * ABI because nothing exercised the bytes32 path — a test that only checks
+   * decoded output would have missed it too. What has to be pinned is that the
+   * bytes32 variant addresses the SAME function as the string variant.
+   */
+  const selectorsOf = (abi: readonly unknown[]) =>
+    Object.fromEntries(
+      (abi as { name: string; type: string }[])
+        .filter((e) => e.type === "function")
+        .map((e) => [e.name, toFunctionSelector(`${e.name}()`)])
+    );
+
+  it("uses the SAME selectors as the string variant, not NAME()/SYMBOL()", () => {
+    const b32 = selectorsOf(ERC20_BYTES32_ABI);
+    expect(b32.name).toBe("0x06fdde03"); // name()
+    expect(b32.symbol).toBe("0x95d89b41"); // symbol()
+    // The two that the old ABI actually called, and that nothing implements.
+    expect(b32.name).not.toBe("0xa3f4df7e"); // NAME()
+    expect(b32.symbol).not.toBe("0xf76f8d78"); // SYMBOL()
+  });
+
+  it("agrees selector-for-selector with the string ABI", () => {
+    const str = selectorsOf(ERC20_ABI);
+    const b32 = selectorsOf(ERC20_BYTES32_ABI);
+    expect(b32.name).toBe(str.name);
+    expect(b32.symbol).toBe(str.symbol);
+  });
+
+  it("declares bytes32 outputs, which is the only thing that may differ", () => {
+    const out = (abi: readonly unknown[], fn: string) =>
+      (abi as { name: string; outputs: { type: string }[] }[]).find((e) => e.name === fn)
+        ?.outputs?.[0]?.type;
+    expect(out(ERC20_BYTES32_ABI, "name")).toBe("bytes32");
+    expect(out(ERC20_BYTES32_ABI, "symbol")).toBe("bytes32");
+    expect(out(ERC20_ABI, "name")).toBe("string");
+    expect(out(ERC20_ABI, "symbol")).toBe("string");
+  });
+
+  it("keeps the two ABIs separate — viem cannot hold both variants in one", () => {
+    // Same name + different outputs in one ABI is what forced the split; if a
+    // future edit merges them, viem resolves one arbitrarily and the other is
+    // silently unreachable.
+    const names = (ERC20_ABI as unknown as { name: string }[]).map((e) => e.name);
+    expect(names).not.toContain("NAME");
+    expect(names).not.toContain("SYMBOL");
+    expect(new Set(names).size).toBe(names.length);
   });
 });
