@@ -169,10 +169,40 @@ indexer.onEvent({ contract: "PoolManager", event: "Swap" }, async ({ event, cont
   // Store current pool TVL values for later calculations
   const currentPoolTvlETH = pool.totalValueLockedETH;
   const currentPoolTvlUSD = pool.totalValueLockedUSD;
-  // Update pool values (feeTier updated to actual swap fee for dynamic fee pools)
+  /*
+   * `feeTier` IS NOT UPDATED HERE, and that is the fix for a real corruption.
+   *
+   * `Swap.fee` and `Initialize.fee` are different quantities that share a name.
+   * `Initialize.fee` is `PoolKey.fee` — the pool's LP fee, and the only thing
+   * `feeTier` is supposed to hold. `Swap.fee` is the EFFECTIVE fee the swapper
+   * paid, which v4 composes in `ProtocolFeeLibrary.calculateSwapFee` as
+   *
+   *     protocolFee + lpFee - (protocolFee * lpFee) / 1e6
+   *
+   * So on any pool with a protocol fee set, overwriting `feeTier` with
+   * `Swap.fee` stores an INFLATED number. Measured on mainnet: lpFee 150000
+   * with a 0.1% protocol fee stored as 150850, 200000 as 200800, 80000 as
+   * 80920, 79600 as 80521 — each matching the formula exactly.
+   *
+   * That is not cosmetic downstream. The Tickwise backend compares this value
+   * against a 50,000-pip ceiling to classify a pool as a fee honeypot and then
+   * ZEROES ITS TVL (`pools-sync.service.ts:166`), so a legitimate pool at
+   * lpFee 49,900 inflates to 50,850, crosses the line, and silently disappears.
+   *
+   * The previous comment justified the write as serving dynamic-fee pools. It
+   * does not: for those, `PoolKey.fee` is the 0x800000 sentinel, which is what
+   * consumers switch on, and `Swap.fee` there is still protocol-fee-inclusive
+   * so it is not the pool's LP fee either. The per-swap effective fee is not
+   * lost — it is recorded on `Swap.fee`, which schema.graphql:19-22 added for
+   * exactly this purpose.
+   *
+   * Avalanche cannot show the bug today: its PoolManager has no protocol fee
+   * controller installed, every pool reads protocolFee 0, and all 82,344 Swap
+   * rows carry `Swap.fee == PoolKey.fee`. The write is a no-op there and a
+   * corruption everywhere a protocol fee is switched on.
+   */
   pool = {
     ...pool,
-    feeTier: BigInt(event.params.fee),
     txCount: pool.txCount + 1n,
     sqrtPrice: event.params.sqrtPriceX96,
     tick: event.params.tick,

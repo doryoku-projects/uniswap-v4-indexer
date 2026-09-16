@@ -7,7 +7,7 @@
  *
  * `shouldTraceFees` is the gate on `debug_traceTransaction`, which is the only
  * source of the exact collected fee. `feeGate` is the gate on
- * `getFeeGrowthInside`, and its job here is to be the SINGLE source both the
+ * `getPositionInfoAt`, and its job here is to be the SINGLE source both the
  * preload pass and the real pass consult.
  */
 
@@ -15,11 +15,11 @@ import { describe, it, expect, vi } from "vitest";
 
 import {
   feeGate,
-  readFeeGrowthInside,
+  readPositionBaseline,
   shouldTraceFees,
   type FeeGateEvent,
 } from "./utils/feeGate";
-import { getFeeGrowthInside, getPositionFeeGrowthBatch } from "./effects/positionState";
+import { getPositionInfoAt, getPositionFeeGrowthBatch } from "./effects/positionState";
 import { TickMath } from "./utils/liquidityMath/tickMath";
 
 /** Avalanche, whose PositionManager is the one the tokenId-137 case ran through. */
@@ -247,30 +247,31 @@ describe("feeGate — one predicate for the preload pass and the real path", () 
      */
     const effect = vi.fn(async (_effect: unknown, _input: unknown) => ({
       ok: true,
-      feeGrowthInside0X128: 1n,
-      feeGrowthInside1X128: 2n,
+      liquidity: 3n,
+      feeGrowthInside0LastX128: 1n,
+      feeGrowthInside1LastX128: 2n,
     }));
-    const context = { effect } as unknown as Parameters<typeof readFeeGrowthInside>[0];
+    const context = { effect } as unknown as Parameters<typeof readPositionBaseline>[0];
 
     const degenerateAtPreload = evt({ poolSqrtPrice: 0n });
     const healthyAtReal = evt();
 
-    expect(await readFeeGrowthInside(context, degenerateAtPreload)).toBeUndefined();
+    expect(await readPositionBaseline(context, degenerateAtPreload)).toBeUndefined();
     expect(effect).toHaveBeenCalledTimes(0);
 
-    await readFeeGrowthInside(context, healthyAtReal);
+    await readPositionBaseline(context, healthyAtReal);
     expect(effect).toHaveBeenCalledTimes(1);
-    expect(effect.mock.calls[0]![0]).toBe(getFeeGrowthInside);
+    expect(effect.mock.calls[0]![0]).toBe(getPositionInfoAt);
     expect(effect.mock.calls[0]![1]).toEqual(feeGate(healthyAtReal).effectInput);
   });
 
   it("issues NOTHING when the gate says no, in either pass", async () => {
     const effect = vi.fn();
-    const context = { effect } as unknown as Parameters<typeof readFeeGrowthInside>[0];
+    const context = { effect } as unknown as Parameters<typeof readPositionBaseline>[0];
     const closed = evt({ poolTick: TickMath.MIN_TICK });
 
-    expect(await readFeeGrowthInside(context, closed)).toBeUndefined();
-    expect(await readFeeGrowthInside(context, closed)).toBeUndefined();
+    expect(await readPositionBaseline(context, closed)).toBeUndefined();
+    expect(await readPositionBaseline(context, closed)).toBeUndefined();
     expect(effect).not.toHaveBeenCalled();
   });
 });
@@ -287,10 +288,10 @@ describe("effect options that are load-bearing rather than cosmetic", () => {
     readonly crossChain?: boolean;
     readonly rateLimit?: { callsPerDuration: number; durationMs: number };
   };
-  const inside = getFeeGrowthInside as unknown as EffectInternals;
+  const inside = getPositionInfoAt as unknown as EffectInternals;
   const batch = getPositionFeeGrowthBatch as unknown as EffectInternals;
 
-  it("getFeeGrowthInside rate-limits above the five-chain shared floor, but not so wide the request is rejected", () => {
+  it("getPositionInfoAt rate-limits above the five-chain shared floor, but not so wide the request is rejected", () => {
     /*
      * Two-sided, because this number is bounded from BOTH directions and a
      * previous version of this change got the upper bound wrong.
@@ -315,7 +316,7 @@ describe("effect options that are load-bearing rather than cosmetic", () => {
     expect(inside.rateLimit!.callsPerDuration).toBeLessThanOrEqual(250);
   });
 
-  it("getFeeGrowthInside keeps its cache and its crossChain scope", () => {
+  it("getPositionInfoAt keeps its cache and its crossChain scope", () => {
     // NOT because crossChain: true is better — because the cache table name
     // encodes the scope (`Internal.res.mjs:222-228`), so flipping it silently
     // ORPHANS every cached row. `rateLimit` is the runtime-only knob; this

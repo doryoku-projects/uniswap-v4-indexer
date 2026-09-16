@@ -1,0 +1,66 @@
+# yaml-language-server: $schema=./node_modules/envio/evm.schema.json
+#
+# Avalanche-only copy of config.yaml, for a local single-chain run.
+# scripts/dev.mjs derives ENVIO_PG_SCHEMA=avalanche from this filename, so this
+# dataset stays in its own schema and never collides with the multi-chain one.
+# Generated from config.yaml — keep the contracts section in sync by hand.
+name: uniswap-v4-indexer
+storage:
+  postgres: true
+contracts:
+  - name: PoolManager
+    events:
+      - event: Approval(address indexed owner, address indexed spender, uint256 indexed id, uint256 amount)
+      - event: Donate(bytes32 indexed id, address indexed sender, uint256 amount0, uint256 amount1)
+      - event: Initialize(bytes32 indexed id, address indexed currency0, address indexed currency1, uint24 fee, int24 tickSpacing, address hooks, uint160 sqrtPriceX96, int24 tick)
+      - event: ModifyLiquidity(bytes32 indexed id, address indexed sender, int24 tickLower, int24 tickUpper, int256 liquidityDelta, bytes32 salt)
+        field_selection: # Additional fields available to index to augment data
+          transaction_fields:
+            - "hash"
+            - "from"
+            # Gas for the position's totalGasCostETH and per-transaction rows.
+            # l1Fee is the OP-stack data fee: Ponder cannot capture it (its
+            # receipt has no such field, documented there as unfixable), so this
+            # is strictly more accurate. It is absent on non-OP chains, where it
+            # comes back undefined and is treated as zero.
+            - "gasUsed"
+            - "effectiveGasPrice"
+            - "l1Fee"
+      - event: OperatorSet(address indexed owner, address indexed operator, bool approved)
+      - event: OwnershipTransferred(address indexed user, address indexed newOwner)
+      - event: ProtocolFeeControllerUpdated(address indexed protocolFeeController)
+      - event: ProtocolFeeUpdated(bytes32 indexed id, uint24 protocolFee)
+      - event: Swap(bytes32 indexed id, address indexed sender, int128 amount0, int128 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick, uint24 fee)
+        field_selection: # Additional fields available to index to augment data
+          transaction_fields:
+            - "hash"
+            - "from"
+      - event: Transfer(address caller, address indexed from, address indexed to, uint256 indexed id, uint256 amount)
+  - name: PositionManager
+    events:
+      - event: Subscription(uint256 indexed tokenId, address indexed subscriber)
+        field_selection:
+          transaction_fields:
+            - "hash"
+            - "from"
+      - event: Transfer(address indexed from, address indexed to, uint256 indexed id)
+        field_selection:
+          transaction_fields:
+            - "hash"
+            - "from"
+      - event: Unsubscription(uint256 indexed tokenId, address indexed subscriber)
+        field_selection:
+          transaction_fields:
+            - "hash"
+            - "from"
+chains:
+  # ── Avalanche (43114)
+  - id: 43114
+    start_block: 56195376
+    contracts:
+      - name: PositionManager
+        address:
+          - 0xb74b1f14d2754acfcbbe1a221023a5cf50ab8acd
+      - name: PoolManager
+        address:
+          - 0x06380c0e0912312b5150364b9dc4542ba0dbbc85

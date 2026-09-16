@@ -19,7 +19,7 @@ import { getFeesAccrued } from "../effects/feesAccrued";
 import { pickFeeFrame, saltOrdinal } from "../utils/feeFrames";
 import {
   feeGate,
-  readFeeGrowthInside,
+  readPositionBaseline,
   shouldTraceFees,
   traceGateCanPass,
   type FeeGateEvent,
@@ -158,7 +158,7 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
         tokenIds: [existingToken0.id, existingToken1.id],
         includeUniswapDayData: true,
       }),
-      readFeeGrowthInside(context, feeGateEvent),
+      readPositionBaseline(context, feeGateEvent),
       // Only for a PositionManager caller: a non-attributable event never
       // reaches either read in the real pass, so warming them would be a query
       // spent on nothing.
@@ -630,7 +630,7 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
      * it is a pool-level, end-of-block number, and the fee it was being used to
      * predict is set by the position's own mid-transaction checkpoint.
      */
-    const fgNow = await readFeeGrowthInside(context, feeGateEvent);
+    const fgNow = await readPositionBaseline(context, feeGateEvent);
 
     /*
      * THE READ SURVIVES; THE COMPARISON DOES NOT. `feeGrowthChanged` used to be
@@ -641,11 +641,25 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
      *
      * `fgNow` itself is still needed, for the two baseline columns below.
      */
-    // Re-baseline to what the pool reports now, so the next event's comparison
-    // is against this settle. Ponder advances this even when the trace fails,
-    // so accounting stays consistent and only that one collect is under-counted.
-    const fg0Last = fgNow?.ok ? fgNow.feeGrowthInside0X128 : existing.feeGrowthInside0LastX128;
-    const fg1Last = fgNow?.ok ? fgNow.feeGrowthInside1X128 : existing.feeGrowthInside1LastX128;
+    /*
+     * Re-baseline to THE POSITION'S OWN checkpoint — the value `Position.update`
+     * just wrote — so the head sweep's uncollected delta measures from the same
+     * point the contract will.
+     *
+     * This used to store the POOL's `getFeeGrowthInside` sampled at the end of
+     * the block, which is a different quantity and wrong whenever the range
+     * moved again later in the same block. Measured on Avalanche below block
+     * 59,978,300: 4 of 155 open positions carried a baseline AHEAD of the
+     * contract's (tokenIds 228, 291, 195, 196), which permanently under-counts
+     * their next settle — 13.725 Volta on 228 — and 127 closed positions held
+     * cleared-tick garbage, 53 of them exactly 0.
+     *
+     * A failed read carries the previous baseline forward rather than advancing
+     * it, because advancing to an unread value would make the next settle diff
+     * against a number the contract never wrote.
+     */
+    const fg0Last = fgNow?.ok ? fgNow.feeGrowthInside0LastX128 : existing.feeGrowthInside0LastX128;
+    const fg1Last = fgNow?.ok ? fgNow.feeGrowthInside1LastX128 : existing.feeGrowthInside1LastX128;
 
     let settled0 = ZERO_BD;
     let settled1 = ZERO_BD;

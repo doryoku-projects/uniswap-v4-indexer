@@ -3,7 +3,7 @@
  *
  * WHY THIS MODULE EXISTS
  *
- * `getFeeGrowthInside` is issued from TWO call sites in
+ * `getPositionInfoAt` is issued from TWO call sites in
  * `handlers/modifyLiquidity-handler.ts` — the preload block and the real path —
  * so that the whole batch's reads go out in parallel instead of one at a time
  * (see `PRELOAD` below). Two call sites with a copy of the predicate in each is
@@ -48,7 +48,7 @@
 
 import { type EvmOnEventContext } from "envio";
 
-import { getFeeGrowthInside } from "../effects/positionState";
+import { getPositionInfoAt } from "../effects/positionState";
 import { isDegenerate, tokenIdFromSalt } from "./positions";
 import { positionManagerFor, v4AddressesFor } from "./v4Addresses";
 
@@ -84,13 +84,17 @@ export interface FeeGateEvent {
   readonly poolSqrtPrice: bigint | undefined;
 }
 
-/** The exact `getFeeGrowthInside` input, built in one place so both passes agree. */
+/** The exact `getPositionInfoAt` input, built in one place so both passes agree. */
 export interface FeeGrowthEffectInput {
   readonly chainId: number;
   readonly stateView: string;
   readonly poolId: string;
+  /** The PositionManager — v4's on-chain owner of every NFT position. */
+  readonly owner: string;
   readonly tickLower: number;
   readonly tickUpper: number;
+  /** `event.params.salt`, which for a PositionManager modify IS bytes32(tokenId). */
+  readonly salt: string;
   readonly blockNumber: bigint;
 }
 
@@ -106,7 +110,7 @@ export interface FeeGateDecision {
   readonly attributable: boolean;
   /** The NFT tokenId, when `attributable` and the salt carries one. */
   readonly tokenId: bigint | undefined;
-  /** Must `getFeeGrowthInside` be issued for this event? */
+  /** Must `getPositionInfoAt` be issued for this event? */
   readonly read: boolean;
   /** Present iff `read`. */
   readonly effectInput: FeeGrowthEffectInput | undefined;
@@ -116,7 +120,7 @@ const NO_READ = { read: false as const, effectInput: undefined };
 
 /**
  * THE single source of truth for "does this ModifyLiquidity need a
- * getFeeGrowthInside read, and for which position".
+ * getPositionInfoAt read, and for which position".
  *
  * The read is gated on `!degenerate` ALONE among the fee conditions — the same
  * place Ponder has it (apps/v4/src/index.ts:211-212) — and deliberately NOT on
@@ -152,41 +156,57 @@ export function feeGate(e: FeeGateEvent): FeeGateDecision {
     read: true,
     effectInput: {
       chainId: e.chainId,
-      // `?? ""` rather than a skip, matching the call site this replaced: a
-      // chain with no StateView produces a failing read, which returns
-      // `ok: false` and therefore FORCES the trace. Skipping would instead
-      // produce `undefined`, which reads as "unchanged" and would silently
-      // record no collected fee.
+      // `?? ""` rather than a skip: a chain with no StateView produces a
+      // FAILING read, which returns `ok: false`, and the caller then carries the
+      // previous baseline forward untouched. Skipping would instead produce
+      // `undefined`, which is easy to misread as "nothing changed" — the exact
+      // confusion that let a missing read masquerade as a measured zero.
       stateView: v4AddressesFor(e.chainId)?.stateView ?? "",
       poolId: e.poolId,
+      owner: positionManager,
       tickLower: Number(e.tickLower),
       tickUpper: Number(e.tickUpper),
+      salt: e.salt,
       blockNumber: BigInt(e.blockNumber),
     },
   };
 }
 
-/** What `getFeeGrowthInside` resolves to, or `undefined` when the gate said no. */
+/** What `getPositionInfoAt` resolves to, or `undefined` when the gate said no. */
 export type FeeGrowthReading =
-  | { readonly ok: boolean; readonly feeGrowthInside0X128: bigint; readonly feeGrowthInside1X128: bigint }
+  | {
+      readonly ok: boolean;
+      readonly liquidity: bigint;
+      readonly feeGrowthInside0LastX128: bigint;
+      readonly feeGrowthInside1LastX128: bigint;
+    }
   | undefined;
 
 /**
- * Evaluate the gate and, when it passes, issue `getFeeGrowthInside`.
+ * Evaluate the gate and, when it passes, issue `getPositionInfoAt`.
  *
  * Called from BOTH passes with the same arguments. In the preload pass the
  * result is discarded — the point is the side effect of populating the effect's
  * in-memory output dict, exactly as `preloadIntervalData` populates the load
  * layer's (utils/intervalUpdates.ts:159-171). In the real pass the same call
  * short-circuits to that dict and costs nothing.
+ *
+ * THIS USED TO READ `getFeeGrowthInside`, and the swap is the point. That call
+ * returns a POOL-level number sampled at the END of the block; the baseline it
+ * was being stored into is the POSITION's own MID-transaction checkpoint. The
+ * handler's own comments already say the two are not comparable — that is why
+ * the trace gate stopped using it — but the value was still being written into
+ * `feeGrowthInside0/1LastX128`, which the head sweep diffs to value uncollected
+ * fees. `getPositionInfo` returns the checkpoint itself, so there is no
+ * sampling instant left to get wrong.
  */
-export async function readFeeGrowthInside(
+export async function readPositionBaseline(
   context: handlerContext,
   e: FeeGateEvent,
 ): Promise<FeeGrowthReading> {
   const gate = feeGate(e);
   if (!gate.read || !gate.effectInput) return undefined;
-  return await context.effect(getFeeGrowthInside, gate.effectInput);
+  return await context.effect(getPositionInfoAt, gate.effectInput);
 }
 
 /**
@@ -256,7 +276,7 @@ export async function readFeeGrowthInside(
  * `existing.liquidity > 0n` inside `gateCanPass` — mints are the bulk of
  * ModifyLiquidity and they never reach this.
  *
- * `getFeeGrowthInside` is still read on every attributable event, and that is
+ * The baseline read is still issued on every attributable event, and that is
  * not vestigial: it feeds `feeGrowthInside0/1LastX128` on the Position row,
  * which the schema exposes and the head sweep diffs against. It is simply no
  * longer allowed to veto a trace.
