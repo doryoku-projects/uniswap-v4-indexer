@@ -159,6 +159,12 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
         includeUniswapDayData: true,
       }),
       readFeeGrowthInside(context, feeGateEvent),
+      // The replay guard's own read, warmed here so it is grouped with the rest
+      // of the batch instead of costing one serialized SELECT per event in the
+      // sequential pass. Same id the guard computes below.
+      context.ModifyLiquidity.get(
+        `${event.chainId}_${event.transaction.hash}_${event.logIndex}`,
+      ),
       // Only for a PositionManager caller: a non-attributable event never
       // reaches either read in the real pass, so warming them would be a query
       // spent on nothing.
@@ -183,6 +189,55 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
         ? context.Position.get(positionId(event.chainId, gate.tokenId))
         : undefined,
     ]);
+    return;
+  }
+
+  /*
+   * REPLAY GUARD — everything below this line is NOT idempotent.
+   *
+   * On 2026-09-16 the hosted indexer committed chain 4663 blocks
+   * 6,686,659..6,695,055, restarted three seconds later, and resumed from a
+   * checkpoint one batch BEHIND that commit (6,686,658). The entity write and
+   * the progress write are not atomic, so the whole range was applied twice.
+   *
+   * The damage was entirely in the read-modify-write accumulators, and the
+   * asymmetry is the whole diagnosis: rows keyed on
+   * `chainId_txHash_logIndex` — `ModifyLiquidity`, `PositionTransaction` — are
+   * written with a plain SET, so a second application OVERWRITES them and they
+   * came out correct. Everything of the shape `existing.x + delta` doubled:
+   * `Position.liquidity`, `depositedToken0/1`, `withdrawnToken0/1`,
+   * `totalFeesCollected0/1`, `totalGasCostETH`, `Tick.liquidityGross/Net`,
+   * `Pool.liquidity`/TVL/`txCount`, and every Day/Hour rollup.
+   *
+   * Measured: 170 of 40,641 chain-4663 positions wrong, all OVERSTATED, 65 of
+   * them exactly 2x. 27 are closed on chain but stored `isActive: true` with
+   * balances that no longer exist — and those never self-heal, because a closed
+   * position gets no further events.
+   *
+   * The guard is a keyed read of the one row this event is guaranteed to have
+   * written. Three reasons it is safe, each verified rather than assumed:
+   *
+   *  1. It cannot self-trip in the preload pass: `set` is `noopSet` there
+   *     (UserContext.res.mjs:88,102), so nothing is written before this point.
+   *     It also sits AFTER the preload `return` above, so it never runs twice.
+   *  2. It cannot collide inside a batch: the id carries `logIndex`, so it is
+   *     unique per event.
+   *  3. It does not break a genuine reorg: rollback restores entities to the
+   *     target checkpoint (`InMemoryStore.res.mjs:118` -> `getRollbackData`),
+   *     so the row is gone before the range is legitimately re-processed.
+   *
+   * It must stay HERE — above `Tick.set` at the first write below — and not at
+   * the `ModifyLiquidity.set` further down, or the tick and pool accumulators
+   * are already doubled by the time it fires.
+   */
+  const eventId = `${event.chainId}_${event.transaction.hash}_${event.logIndex}`;
+  if (await context.ModifyLiquidity.get(eventId)) {
+    context.log.warn(
+      `ModifyLiquidity ${eventId} has already been applied — skipping. This is a ` +
+        `REPLAY: the indexer is re-processing a range it already committed. The ` +
+        `entity rows are idempotent but the running sums are not, so re-applying ` +
+        `would inflate liquidity, cashflows and collected fees.`,
+    );
     return;
   }
 

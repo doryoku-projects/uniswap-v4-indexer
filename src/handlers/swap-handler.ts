@@ -100,6 +100,35 @@ indexer.onEvent({ contract: "PoolManager", event: "Swap" }, async ({ event, cont
       tokenIds: [token0.id, token1.id],
       includeUniswapDayData: true,
     });
+    // The replay guard's own read, warmed so it is grouped rather than costing
+    // a serialized SELECT per event in the sequential pass.
+    await context.Swap.get(
+      `${event.chainId}_${event.block.number}_${event.logIndex}`,
+    );
+    return;
+  }
+
+  /*
+   * REPLAY GUARD — see the long note in modifyLiquidity-handler.ts for the
+   * incident this exists for.
+   *
+   * Same asymmetry here: `Swap` is keyed on `chainId_blockNumber_logIndex` and
+   * written with a plain SET, so a replay overwrites it harmlessly. Everything
+   * else this handler touches is a running sum — `Pool.liquidity`, `txCount`,
+   * `volumeToken0/1`, `volumeUSD`, `feesUSD`, the TVL fields, `Token.volume`,
+   * `PoolManager` totals and every Day/Hour rollup — and all of it doubles if
+   * the range is applied twice.
+   *
+   * Placed above the first write for the same reason as the other handler: the
+   * aggregates are mutated well before `Swap.set` at the bottom.
+   */
+  const swapEventId = `${event.chainId}_${event.block.number}_${event.logIndex}`;
+  if (await context.Swap.get(swapEventId)) {
+    context.log.warn(
+      `Swap ${swapEventId} has already been applied — skipping. This is a REPLAY: ` +
+        `the indexer is re-processing a range it already committed, and the volume ` +
+        `and TVL aggregates are not idempotent.`,
+    );
     return;
   }
 
