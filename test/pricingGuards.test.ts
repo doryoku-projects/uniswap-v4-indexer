@@ -238,6 +238,59 @@ describe("findNativePerToken imbalance guard", () => {
     expect(price.eq(bd(0))).toBe(true);
   });
 
+  it("rejects a pool holding NONE of the token being priced, at any price", async () => {
+    /*
+     * THE ZERO-BALANCE HOLE. `impliedOurSideETH` is
+     * `ourSideBalance * candidatePrice`, so a zero balance of the priced token
+     * makes it 0 — and `0 <= ethLocked * 1000` is true for every candidate
+     * price. The bound is satisfied precisely when it can verify nothing.
+     *
+     * The price here is the real magnitude an extreme-tick pool produces:
+     * 1.0001^887272 ~= 3.4e38. Until `sqrtPriceX96ToTokenPrices` stopped
+     * inverting an already-rounded value, such a pool's `token0Price` rounded to
+     * 0, so this path was harmless BY ACCIDENT. With the price now exact, an
+     * unguarded pass writes derivedETH ~= 3.4e38, which inflates TVL for every
+     * pool holding the token.
+     *
+     * 50 WETH of real capital clears the 1 ETH minimum, so the deposit
+     * threshold the guard relies on is no defence on its own.
+     */
+    const token = makeToken("0x3333333333333333333333333333333333333333", {
+      whitelistPools: ["one-sided-extreme-tick-pool"],
+    });
+    const pool = makePool("one-sided-extreme-tick-pool", {
+      token0: WETH,
+      token1: token.id.split("_")[1]!,
+      tvl0: bd("50"), // real WETH, clears minimumNativeLocked
+      tvl1: bd("0"), // holds NONE of the priced token
+      token0Price: bd("3.402568e38"), // 1.0001^887272
+    });
+    const context = makeContext([pool], [weth]);
+
+    const price = await priceFor(context, token);
+    expect(price.eq(bd(0))).toBe(true);
+  });
+
+  it("still prices a one-sided-ish pool that holds SOME of the token", async () => {
+    // The rejection above must key on a genuinely ZERO balance, not merely a
+    // lopsided one — concentrated liquidity is lopsided by design, and an
+    // honest thin pool inside the 1000x bound must still price.
+    const token = makeToken("0x4444444444444444444444444444444444444444", {
+      whitelistPools: ["thin-but-honest"],
+    });
+    const pool = makePool("thin-but-honest", {
+      token0: WETH,
+      token1: token.id.split("_")[1]!,
+      tvl0: bd("50"),
+      tvl1: bd("0.001"), // tiny, but non-zero
+      token0Price: bd("2"), // implies 0.002 ETH, far inside 50 * 1000
+    });
+    const context = makeContext([pool], [weth]);
+
+    const price = await priceFor(context, token);
+    expect(price.eq(bd(2))).toBe(true);
+  });
+
   it("leaves the wrapped-native and stablecoin fast paths untouched", async () => {
     const context = makeContext([], []);
     const wethPrice = await priceFor(context, makeToken(WETH));

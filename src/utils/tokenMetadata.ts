@@ -123,18 +123,47 @@ function sanitizeString(str: string): string {
   return str.replace(/[\u0000-\u001F\u007F-\u009F]/g, "").trim();
 }
 
+/**
+ * `blockNumber` IS PART OF THE CACHE KEY, on purpose.
+ *
+ * The reads are pinned to a block (see `fetchTokenMetadataMulticall`), so the
+ * block has to be in the key — caching on `(address, chainId)` alone would let
+ * one run's answer at one block be served for a different block, which is the
+ * same non-determinism the pinning exists to remove.
+ *
+ * THE COST, MEASURED rather than assumed. An earlier version of this note
+ * claimed "one key per token either way", on the reasoning that a Token row is
+ * created once so the effect fires once. That is wrong, and the data says so:
+ * over blocks 56,195,376-60,970,065 the cache holds 169 rows for 122 tokens —
+ * 102 tokens with one entry, 14 with two, two with three, two with four, USDC
+ * with nine and native AVAX with sixteen.
+ *
+ * The mechanism is Envio's batch semantics, not this key. Within one processing
+ * batch `context.Token.get` returns undefined for every `Initialize` in it,
+ * because the row has not committed yet, so the effect fires once per distinct
+ * init block in that batch; after the row commits it never fires again. Each
+ * multi-entry token's cached blocks are therefore a contiguous PREFIX of its
+ * pool-init blocks, which is exactly the shape observed.
+ *
+ * So the extra keys are a batch artifact that the block simply makes visible —
+ * it is nowhere near per-token-per-pool, which here would be 432. The overhead
+ * is 47 redundant RPC triples for the whole range, and every duplicate agrees
+ * with every other and with the contract at its own block. Worth knowing before
+ * anyone reads a row count as a token count.
+ */
 export const getTokenMetadata = createEffect(
   {
     name: "getTokenMetadata",
     input: S.tuple((t) => ({
       address: t.item(0, S.address),
       chainId: t.item(1, S.number as S.Schema<EvmChainId>),
+      blockNumber: t.item(2, S.bigint),
     })),
     output: TokenMetadata,
     rateLimit: false,
     cache: true,
   },
-  async ({ context, input: { address, chainId } }) => {
+  async ({ context, input: { address, chainId, blockNumber } }) => {
     // Handle native token
     if (address.toLowerCase() === ADDRESS_ZERO.toLowerCase()) {
       const chainConfig = getChainConfig(chainId);
@@ -165,7 +194,7 @@ export const getTokenMetadata = createEffect(
 
     try {
       // Use the multicall implementation for efficiency
-      return await fetchTokenMetadataMulticall(address, chainId, context);
+      return await fetchTokenMetadataMulticall(address, chainId, context, blockNumber);
     } catch (e) {
       context.log.error(
         `Error fetching metadata for ${address} on chain ${chainId}:`,
@@ -188,7 +217,8 @@ export const getTokenMetadata = createEffect(
 export async function fetchTokenMetadataMulticall(
   address: Address,
   chainId: number,
-  context: { cache: boolean; log: { warn: (msg: string) => void } }
+  context: { cache: boolean; log: { warn: (msg: string) => void } },
+  blockNumber: bigint
 ): Promise<TokenMetadata> {
   const client = getClient(chainId);
   const contract = getContract({
@@ -203,13 +233,51 @@ export async function fetchTokenMetadataMulticall(
     client,
   });
 
+  /*
+   * PINNED TO `blockNumber`, not read at the chain head.
+   *
+   * These calls used to pass no block, so viem resolved them against `latest` —
+   * whatever the chain looked like at the moment the indexer happened to reach
+   * this token, which for a backfill is millions of blocks after the event being
+   * indexed. The values are then not a function of the indexed range at all, and
+   * two runs over the same blocks can disagree.
+   *
+   * Measured on Avalanche: `0xa25eaf2906fa1a3a13edac9b9657108af7b703e3` was
+   * stored as `stAVAX` / "Hypha Staked AVAX", while the contract returned
+   * `ggAVAX` / "GoGoPool Liquid Staking Token" at the start block, mid-range and
+   * at the boundary. The stored values are what it answers only at `latest`. It
+   * leaked into `Pool.name` for two pools.
+   *
+   * `decimals` travels the same path, and that one is not cosmetic: it is a
+   * divisor. A proxy that changed decimals between the indexed block and head
+   * would mis-scale every historical amount derived from that token, silently
+   * and by a power of ten. Worth being precise about the evidence, though:
+   * across all 122 tokens in that range, NOT ONE returned a different
+   * `decimals()` at its indexed block than at head. The exposure is real; it has
+   * not fired here. Do not cite `decimals` as what this fix repaired.
+   *
+   * WHAT THIS DOES NOT BUY. One read per token, at first sight, makes the answer
+   * DETERMINISTIC — not true for all time. `0xcc0966d8418d412c599a6421b760a847eb169a8c`
+   * is read at block 58,424,753 as `SolvBTC.BBN`, and renames to `xSolvBTC` at
+   * 59,889,338 — inside the indexed range — so the stored symbol is stale for
+   * that range's last 1.08M blocks, and there is no second `Initialize` to pick
+   * the new one up. Before the fix, the `latest` read happened to match that
+   * later state by luck. Tracking a rename properly needs re-reading metadata on
+   * some cadence, which is a different feature; what is fixed here is that two
+   * runs over the same blocks now agree.
+   *
+   * The block also belongs in the effect's cache key for the same reason — see
+   * the note on `getTokenMetadata` below.
+   */
+  const at = { blockNumber } as const;
+
   // Use `null` for failed reads so we can distinguish "read failed" from
   // "read succeeded with a valid empty/zero value".
-  const namePromise = contract.read.name().catch(() => null);
-  const nameBytes32Promise = bytes32Contract.read.name().catch(() => null);
-  const symbolPromise = contract.read.symbol().catch(() => null);
-  const symbolBytes32Promise = bytes32Contract.read.symbol().catch(() => null);
-  const decimalsPromise = contract.read.decimals().catch(() => null);
+  const namePromise = contract.read.name(at).catch(() => null);
+  const nameBytes32Promise = bytes32Contract.read.name(at).catch(() => null);
+  const symbolPromise = contract.read.symbol(at).catch(() => null);
+  const symbolBytes32Promise = bytes32Contract.read.symbol(at).catch(() => null);
+  const decimalsPromise = contract.read.decimals(at).catch(() => null);
 
   const [
     nameResult,

@@ -70,6 +70,7 @@ import { convertTokenToDecimal } from "../utils/index";
 import { currentAmounts, isDegenerate } from "../utils/positions";
 import { v4AddressesFor } from "../utils/v4Addresses";
 import { headAtStartup, isAtChainHead } from "../utils/chainHead";
+import { assertRpcUrlsConfigured } from "../utils/rpc";
 import { feeSweepChainIds } from "../utils/v4Addresses";
 import { activeChainIds } from "../utils/chains";
 
@@ -131,6 +132,44 @@ const SWEEP_INTERVAL_BLOCKS: Readonly<Record<number, number>> = {
  */
 const SWEEP_BATCH_SIZE = 400;
 const SWEEP_CHUNK = 400;
+
+/*
+ * REFUSE TO START if an indexed chain has no configured RPC endpoint.
+ *
+ * Placed here because this module is loaded once per process, before any event
+ * is handled, and it already does module-load startup work — so the failure
+ * lands at boot rather than after a chain has silently accumulated zero fees for
+ * hours. See `assertRpcUrlsConfigured` for why this is fatal rather than a
+ * warning; the short version is that a public fallback cannot serve
+ * `debug_traceTransaction`, and the resulting zero collected fees are
+ * indistinguishable from a position that earned nothing while the indexer
+ * reports 100% synced.
+ *
+ * Scoped to `activeChainIds()` — the chains this config actually indexes — so a
+ * commented-out chain costs nothing. An unreadable config yields an empty set
+ * and skips the gate, matching how the head probe below degrades: this must not
+ * be the thing that blocks a run for a reason unrelated to RPCs.
+ *
+ * WHY `process.exit` AND NOT A BARE THROW. Envio auto-loads handler files and
+ * CATCHES what they throw: a rejected module logs
+ * "Failed to auto-load handler file: src/handlers/feeSync-block.ts" and the
+ * indexer carries on. Measured — it had already printed "Starting indexing!"
+ * before the error appeared. A throw here therefore produces the worst possible
+ * outcome: the run proceeds with THIS handler silently absent, so the fee sweep
+ * never registers at all and `totalFeesUncollected` is never written on any
+ * chain. Exiting is the only halt the loader cannot swallow.
+ *
+ * The assertion itself still throws rather than exiting, so it stays pure and
+ * unit-testable; only this call site turns that into a process exit.
+ */
+try {
+  assertRpcUrlsConfigured(activeChainIds());
+} catch (e) {
+  // stderr, not context.log: no handler context exists at module load, and this
+  // must be legible in a bare cloud log.
+  console.error(`\nFATAL: ${e instanceof Error ? e.message : String(e)}\n`);
+  process.exit(1);
+}
 
 /*
  * The chain heads as of process start, used as a `_gte` floor below.

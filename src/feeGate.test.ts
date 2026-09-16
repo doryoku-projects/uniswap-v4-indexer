@@ -146,10 +146,29 @@ describe("feeGate — one predicate for the preload pass and the real path", () 
     expect(d.read).toBe(false);
   });
 
-  it("skips the read on a degenerate pool but still reports the tokenId", () => {
-    // The tokenId is still needed: the real path writes the Position row for a
-    // degenerate pool too, with zeroed amounts and isPriceable false. Only the
-    // fee READ is pointless there.
+  it("STILL READS on a degenerate pool — the baseline is storage, not tick math", () => {
+    /*
+     * REVERSED, deliberately. This test used to assert `read === false` here,
+     * and that skip cost real data.
+     *
+     * The read is `getPositionInfo`, a mapping load out of PoolManager storage.
+     * It performs no tick math and never touches `sqrtPriceX96`, so a pool
+     * parked at the domain edge does not make it meaningless — it returns a
+     * perfectly well-defined checkpoint. The repo already makes exactly this
+     * argument for `feesAccrued` in `traceGateCanPass`; it was never carried
+     * across to here.
+     *
+     * Measured on Avalanche at block 60,970,065: tokenId 239 stores
+     * `feeGrowthInside0LastX128 = 0` against a contract value of
+     * 55046743943002458572625538413, because its pool collapsed to MIN_TICK
+     * between the mint and the later events and both were gated. The closing
+     * burn then cleared the tick pair, so `getFeeGrowthInside` reads (0,0) there
+     * too — this read is the ONLY one that recovers the truth.
+     *
+     * The handler still zeroes tick-DERIVED valuations and sets
+     * `isPriceable: false`; that is a separate decision, made where the tick
+     * math actually happens.
+     */
     for (const over of [
       { poolTick: TickMath.MIN_TICK },
       { poolTick: TickMath.MAX_TICK },
@@ -159,26 +178,24 @@ describe("feeGate — one predicate for the preload pass and the real path", () 
       const d = feeGate(evt(over));
       expect(d.attributable).toBe(true);
       expect(d.tokenId).toBe(137n);
-      expect(d.read).toBe(false);
-      expect(d.effectInput).toBeUndefined();
+      expect(d.read).toBe(true);
+      expect(d.effectInput).toBeDefined();
     }
   });
 
-  it("reads on an absent tick alone, but a pool missing BOTH fields is degenerate and is not read", () => {
+  it("reads regardless of which pool price fields are absent", () => {
     /*
-     * `pool.tick` is nullable in the schema and `?? 0n` is what the handler
-     * passed before the extraction; 0 is an ordinary in-domain tick, so an
-     * absent tick on its own does not suppress the read.
+     * `pool.tick` and `pool.sqrtPrice` are nullable in the schema. Neither can
+     * suppress the read any more, because neither is an input to it: the effect
+     * is keyed on poolId, owner, ticks, salt and block, none of which come from
+     * the pool's price.
      *
-     * Both absent is the opposite case, and the earlier title of this test had
-     * it backwards. `isDegenerate` compares sqrtPrice against
-     * TickMath.MIN_SQRT_RATIO (4295128739n), and `?? 0n` makes an absent
-     * sqrtPrice 0, which is <= that bound — so the pool IS degenerate and the
-     * read IS skipped. That is deliberate, not an oversight: with no price
-     * there is nothing to read against.
+     * Both earlier versions of this test turned on `isDegenerate`, and the one
+     * before that had the polarity backwards. There is nothing left to get
+     * backwards — the answer is now the same either way.
      */
     expect(feeGate(evt({ poolTick: undefined })).read).toBe(true);
-    expect(feeGate(evt({ poolTick: undefined, poolSqrtPrice: undefined })).read).toBe(false);
+    expect(feeGate(evt({ poolTick: undefined, poolSqrtPrice: undefined })).read).toBe(true);
   });
 
   /*
@@ -238,12 +255,19 @@ describe("feeGate — one predicate for the preload pass and the real path", () 
     expect(a.effectInput).toEqual(b.effectInput);
   });
 
-  it("lets the gate differ across passes without changing the answer — drift costs a warm miss, never a wrong fee", async () => {
+  it("CANNOT drift across passes any more: pool price state no longer gates the read", async () => {
     /*
-     * A swap earlier in the same batch can move a pool across the isDegenerate
-     * boundary between the preload read (DB row) and the real read (in-batch
-     * writes). Pin the consequence: the degenerate pass issues nothing, the
-     * healthy pass issues exactly the input it would have issued anyway.
+     * This test used to pin a real cost. A swap earlier in the same batch can
+     * move a pool across the `isDegenerate` boundary between the preload read
+     * (the DB row) and the real read (in-batch writes), and while pool price was
+     * a GATE that meant the two passes disagreed about whether to read at all —
+     * measured preload=0, real=1 — so the real pass missed the warm and paid one
+     * RPC inside the serial loop.
+     *
+     * Removing the degenerate gate removes the divergence with it. Pool price is
+     * now neither a gate nor part of the memo key, so both passes issue the same
+     * call with the same input whatever the price did in between. Both halves
+     * are asserted: same decision, and the same effect invocation.
      */
     const effect = vi.fn(async (_effect: unknown, _input: unknown) => ({
       ok: true,
@@ -256,22 +280,32 @@ describe("feeGate — one predicate for the preload pass and the real path", () 
     const degenerateAtPreload = evt({ poolSqrtPrice: 0n });
     const healthyAtReal = evt();
 
-    expect(await readPositionBaseline(context, degenerateAtPreload)).toBeUndefined();
-    expect(effect).toHaveBeenCalledTimes(0);
+    expect(feeGate(degenerateAtPreload).effectInput).toEqual(
+      feeGate(healthyAtReal).effectInput,
+    );
 
+    await readPositionBaseline(context, degenerateAtPreload);
     await readPositionBaseline(context, healthyAtReal);
-    expect(effect).toHaveBeenCalledTimes(1);
+
+    expect(effect).toHaveBeenCalledTimes(2);
     expect(effect.mock.calls[0]![0]).toBe(getPositionInfoAt);
-    expect(effect.mock.calls[0]![1]).toEqual(feeGate(healthyAtReal).effectInput);
+    expect(effect.mock.calls[0]![1]).toEqual(effect.mock.calls[1]![1]);
   });
 
   it("issues NOTHING when the gate says no, in either pass", async () => {
+    /*
+     * Two gates remain, and neither depends on pool state: a non-PositionManager
+     * sender (not attributable at all) and a salt that carries no tokenId. This
+     * case used to use a degenerate pool, which no longer gates anything.
+     */
     const effect = vi.fn();
     const context = { effect } as unknown as Parameters<typeof readPositionBaseline>[0];
-    const closed = evt({ poolTick: TickMath.MIN_TICK });
+    const notPositionManager = evt({
+      sender: "0x000000000000000000000000000000000000dEaD",
+    });
 
-    expect(await readPositionBaseline(context, closed)).toBeUndefined();
-    expect(await readPositionBaseline(context, closed)).toBeUndefined();
+    expect(await readPositionBaseline(context, notPositionManager)).toBeUndefined();
+    expect(await readPositionBaseline(context, notPositionManager)).toBeUndefined();
     expect(effect).not.toHaveBeenCalled();
   });
 });

@@ -159,7 +159,6 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
         includeUniswapDayData: true,
       }),
       readPositionBaseline(context, feeGateEvent),
-      readFeeGrowthInside(context, feeGateEvent),
       // The replay guard's own read, warmed here so it is grouped with the rest
       // of the batch instead of costing one serialized SELECT per event in the
       // sequential pass. Same id the guard computes below.
@@ -721,10 +720,21 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
      * it reverts — so observing it is proof the STORE is behind, not proof about
      * the position. Trace it.
      */
+    /*
+     * `storeBehind` — see the third bullet on `traceGateCanPass`.
+     *
+     * Reaching here with `replayed === true` means the replay guard above did
+     * NOT skip, i.e. this event is above the row's watermark and is being folded
+     * in for the first time even though the ledger row already exists. That is
+     * the heal case, and it is proof the store is behind THIS event. Without
+     * passing it, a heal whose window does not start at the position's mint
+     * silently drops the collected fees for every non-negative delta in it.
+     */
     const gateCanPass = traceGateCanPass({
       hadPosition,
       storedLiquidity: existing.liquidity,
       liquidityDelta: delta,
+      storeBehind: replayed,
     });
 
     /*
@@ -885,27 +895,41 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
     }
 
     /*
-     * The event amounts AS THE POSITION SURFACE SEES THEM — zeroed on a
-     * degenerate pool.
+     * The event amounts AS THE POSITION SURFACE SEES THEM. NO LONGER ZEROED on a
+     * degenerate pool, because the chain says the unzeroed value was right.
      *
-     * Ponder gates its event amounts on `degenerate` (apps/v4/src/index.ts:243-244)
-     * and those feed BOTH the cashflow aggregates and the ledger row amounts, so
-     * a pool parked at the domain edge contributes zeros rather than the
-     * astronomical artifact the tick formulas produce there.
+     * The previous note here recorded a deliberate divergence: Ponder gates its
+     * event amounts on `degenerate` (apps/v4/src/index.ts:243-244), and on
+     * Avalanche tokenId 239 — pool 0x88170bcf… at tick -887272 with sqrtPrice
+     * 4295128740 (MIN_SQRT_RATIO+1) — "Ponder's DEPOSIT row reads amount0 = 0
+     * where this port read 6.753059". The zeroing was adopted to match Ponder.
      *
-     * A SEPARATE pair rather than reusing `amount0`/`amount1` directly, because
-     * those also feed this handler's vanilla-subgraph parity surface — pool and
-     * token volume, the ModifyLiquidity entity, the USD figures — and the
-     * subgraph counts every ModifyLiquidity unguarded. Ponder's handler is
-     * position-only, so it can guard in one place; this one cannot.
+     * Ponder was wrong, and so was matching it. Replaying both of that
+     * position's events through `debug_traceTransaction` and taking the
+     * PoolManager's OWN principal, `-(callerDelta - feesAccrued)`:
      *
-     * Observed on Avalanche tokenId 239: pool 0x88170bcf… sits at tick -887272
-     * (MIN_TICK) with sqrtPrice 4295128740 (MIN_SQRT_RATIO+1). Both indexers
-     * already agreed `isPriceable: false`, but Ponder's DEPOSIT row reads
-     * amount0 = 0 where this port read 6.753059.
+     *     block 58506545  delta +393006429335256  contract +6,753,059 units
+     *     block 58506570  delta -393024974430345  contract -6,753,377 units
+     *
+     * The tick math reproduces that to the base unit. 6.753059 was the correct
+     * number. Zeroing it left `depositedToken0` at 0.000197 — 34,000x too small
+     * — `withdrawnToken0` at 0, and both ledger rows at `amount0 = 0`, so a PnL
+     * consumer reads a ~99% loss on a position that roughly broke even.
+     *
+     * The guard fires on the POOL'S PRICE being at the domain edge, not on the
+     * magnitude of the result, so it cannot tell an astronomical artifact from
+     * an exact small number — and it discards both. `isPriceable: false` below
+     * is the honest signal for "do not value this", and it is still set.
+     *
+     * The pair is kept separate from `amount0`/`amount1` even though the values
+     * now coincide: those feed the vanilla-subgraph parity surface (pool and
+     * token volume, the ModifyLiquidity entity, the USD figures), and keeping
+     * the position surface addressable means the next divergence has a seam to
+     * live in. Sourcing them from one expression would have to be undone to add
+     * one back.
      */
-    const posAmount0 = degenerate ? ZERO_BD : amount0;
-    const posAmount1 = degenerate ? ZERO_BD : amount1;
+    const posAmount0 = amount0;
+    const posAmount1 = amount1;
 
     // Does this event produce a PositionTransaction row at all? Ponder's
     // `willWriteRow`, and the condition that gates gas below.
@@ -935,10 +959,31 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
         ? existing.withdrawnToken1
         : existing.withdrawnToken1.minus(posAmount1),
 
-      // Recomputed from the post-change liquidity against the pool's current
-      // tick — the whole reason this needs no getSlot0. Zeroed on a degenerate
-      // pool, where the formulas produce astronomical nonsense, and the position
-      // is flagged unpriceable so no consumer treats the zero as a valuation.
+      /*
+       * Recomputed from the post-change liquidity against the pool's current
+       * tick — the whole reason this needs no getSlot0. STILL zeroed on a
+       * degenerate pool, unlike the cashflow amounts above, and the asymmetry is
+       * deliberate.
+       *
+       * The difference is what can be checked. The cashflow amounts are an EVENT
+       * DELTA, and the PoolManager returns its own principal for that delta in
+       * the call trace, so the tick math there is verifiable against the
+       * contract — and was verified, to the base unit. This is a VALUATION of
+       * the whole position at the current price, and v4 exposes no view function
+       * returning a position's token amounts, so there is nothing to check it
+       * against at the domain edge.
+       *
+       * Un-zeroing an unverifiable number on the strength of a verified
+       * neighbour would be a guess. `isPriceable: false` marks the row, and a
+       * consumer that needs the valuation can recompute it from `liquidity`,
+       * the ticks and a price of its choosing.
+       *
+       * Note this field has a separate, larger problem regardless of the guard:
+       * it is only recomputed on a position event, so it goes stale between
+       * them. Measured at block 60,970,065, 145 of 199 active positions differed
+       * from their true holdings, median ~28 days out of date, because the head
+       * sweep — the only other writer — had never fired.
+       */
       ...(degenerate
         ? { amount0: ZERO_BD, amount1: ZERO_BD }
         : currentAmounts({

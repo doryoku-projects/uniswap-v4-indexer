@@ -100,6 +100,11 @@ indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event
     const metadata = await context.effect(getTokenMetadata, {
       address: event.params.currency0,
       chainId: event.chainId,
+      // Read AT this block, not at the chain head — see the notes in
+      // utils/tokenMetadata.ts. This is the block where the token first becomes
+      // known to the indexer, so it is also the block whose answer the whole
+      // indexed range should be described by.
+      blockNumber: BigInt(event.block.number),
     });
     token0 = {
       id: token0Id,
@@ -135,6 +140,7 @@ indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event
     const metadata = await context.effect(getTokenMetadata, {
       address: event.params.currency1,
       chainId: event.chainId,
+      blockNumber: BigInt(event.block.number),
     });
     token1 = {
       id: token1Id,

@@ -144,11 +144,32 @@ export function feeGate(e: FeeGateEvent): FeeGateDecision {
     return { attributable: true, tokenId: undefined, ...NO_READ };
   }
 
-  // Tick math is meaningless at the edges of the representable domain, so a
-  // degenerate pool's amounts are zeroed and no fee read is worth an RPC.
-  if (isDegenerate(e.poolTick ?? 0n, e.poolSqrtPrice ?? 0n)) {
-    return { attributable: true, tokenId, ...NO_READ };
-  }
+  /*
+   * `isDegenerate` IS DELIBERATELY NOT A GATE HERE ANY MORE.
+   *
+   * It used to return NO_READ for a pool parked at the representable domain
+   * edge, on the same reasoning the handler uses to zero tick-derived amounts:
+   * "tick math is meaningless at the edges". That reasoning does not reach this
+   * read. `getPositionInfo` is a mapping load out of PoolManager storage —
+   * `positions[poolId][keccak(owner, tickLower, tickUpper, salt)]`. It performs
+   * no tick math, never touches `sqrtPriceX96`, and returns a perfectly
+   * well-defined checkpoint at MIN_TICK.
+   *
+   * This is the identical argument `traceGateCanPass` already makes below for
+   * `feesAccrued` ("a return value read from the trace, not tick math"); it was
+   * simply never carried across to the storage read.
+   *
+   * What the gate cost, measured on Avalanche at block 60,970,065: tokenId 239
+   * stores `feeGrowthInside0LastX128 = 0` where the contract holds
+   * 55046743943002458572625538413. Its pool collapsed to MIN_TICK between the
+   * mint and the later events, so both were gated and the row kept the zero
+   * seeded at mint. Worse, the closing burn CLEARED the tick pair, so
+   * `getFeeGrowthInside` reads (0,0) there too — this read is the only one that
+   * recovers the true value, and it was the one being skipped.
+   *
+   * Inert only while liquidity is zero. That pool is still at MIN_TICK, so if
+   * liquidity returns the sweep would diff live growth against a stale 0.
+   */
 
   return {
     attributable: true,
@@ -308,12 +329,34 @@ export function shouldTraceFees(args: { readonly gateCanPass: boolean }): boolea
  *    seeing it proves the STORE is behind (the handler clamps a negative running
  *    liquidity to 0 and warns). The skip above would otherwise "prove" no fees
  *    from a number already known to be wrong, so this forces the trace.
+ *
+ *  - `storeBehind`: the caller KNOWS the store is behind, which is a strictly
+ *    stronger fact than the inference above and must override the skip for the
+ *    same reason.
+ *
+ *    This is the heal path. When the replay guard sees a re-delivered event whose
+ *    watermark is BELOW it, the row is being rebuilt from a stub — so
+ *    `hadPosition` is false (`poolId` is still "") and `storedLiquidity` is 0,
+ *    and the first conjunct skips. `storeLiquidityDesynced` does not rescue it
+ *    either: it only fires on a NEGATIVE delta, so an increase on a position
+ *    that already holds on-chain liquidity, and a pure collect (delta == 0),
+ *    both skip the trace although the chain really settled fees.
+ *
+ *    That loss is PERMANENT. `settled0/1` stay zero, no COLLECT_FEES row is
+ *    written, and `totalFeesCollected0/1` are short for good — unlike
+ *    `liquidity`, which the head sweep re-reads from the contract, nothing ever
+ *    revisits collected fees. The whole point of this indexer is that those
+ *    numbers are exact, so the heal path has to pass its proof in rather than
+ *    let the gate re-derive a weaker one.
  */
 export function traceGateCanPass(args: {
   readonly hadPosition: boolean;
   readonly storedLiquidity: bigint;
   readonly liquidityDelta: bigint;
+  readonly storeBehind: boolean;
 }): boolean {
   const storeLiquidityDesynced = args.storedLiquidity === 0n && args.liquidityDelta < 0n;
-  return (args.hadPosition && args.storedLiquidity > 0n) || storeLiquidityDesynced;
+  return (
+    (args.hadPosition && args.storedLiquidity > 0n) || storeLiquidityDesynced || args.storeBehind
+  );
 }

@@ -5,19 +5,30 @@
  * the handlers and snapshot the resulting entity changes. See
  * .claude/skills/testing/SKILL.md for conventions.
  *
- * `eventsProcessed` ALSO MOVES WITH EFFECT CALLS. It went 12 -> 11 when the fee
- * sweep gained its `_gte` floor, and 11 -> 12 when `getFeeGrowthInside` stopped
- * being gated on `gateCanPass` (a mint now establishes its fee-growth baseline,
- * which is what stops a full close silently losing its collected fee). In both
- * cases the `changes` above were byte-identical — check that, since a real
- * dropped or duplicated event would show up there rather than in this counter.
+ * `eventsProcessed` COUNTS BLOCK-HANDLER ITEMS, AND IS NETWORK-DEPENDENT.
  *
- * `eventsProcessed` COUNTS BLOCK-HANDLER ITEMS TOO. The fee sweep registers with
- * a `_gte` floor at the chain head as of process start (see
- * `src/handlers/feeSync-block.ts`), so no `feeSync` item is generated for a
- * historical block and this count is one lower than it was before that floor
- * existed. If you change the floor, expect this number to move — check that the
- * `changes` above it did NOT, since a real dropped event would show up there.
+ * The 12th item here is the `feeSync` block item, and whether it exists depends
+ * on an RPC call made at module load. `src/handlers/feeSync-block.ts` awaits
+ * `headAtStartup()` and registers `_gte: floor` at the chain head; with a floor
+ * (mainnet head >> this test's block) the block is below it, no item is
+ * generated, and the count is 11. If that lookup FAILS — no
+ * `ENVIO_MAINNET_RPC_URL`, or the public fallback does not answer inside its 5s
+ * timeout — there is no floor, `_every` anchors to the test's own `startBlock`,
+ * an item is generated, and the count is 12. Reproducible:
+ *
+ *     ENVIO_MAINNET_RPC_URL="http://127.0.0.1:1/" <run this file>   # -> 12
+ *
+ * So a change in this number means "the head lookup behaved differently", not
+ * "an event was dropped". ALWAYS check `changes` instead: a genuinely dropped or
+ * duplicated event shows up there, and in every observed case of this counter
+ * moving, `changes` was byte-identical.
+ *
+ * An earlier version of this note claimed the counter "ALSO MOVES WITH EFFECT
+ * CALLS". That is not possible: `Batch.make` computes
+ * `checkpointEventsProcessed` by walking the fetch buffer BEFORE any handler or
+ * effect runs (`node_modules/envio/src/Batch.res`). The claim sent two separate
+ * investigations chasing a dropped event that did not exist; it is corrected
+ * here rather than deleted so the dead end is not re-entered.
  *
  * TIMEOUT: these fetch real chain data over the network, so vitest's 5s default
  * is not a meaningful budget for them — it measures the network, not the code.
@@ -65,6 +76,8 @@ describe("Uniswap V4 Indexer", { timeout: NETWORK_TIMEOUT_MS }, () => {
                   "id": "1_133850",
                   "isActive": false,
                   "isPriceable": true,
+                  "lastModifyBlock": 0n,
+                  "lastModifyLogIndex": 0n,
                   "liquidity": 0n,
                   "origin": "0x16a4eC779ec71F9019fF79CbdD082a078C9eA06A",
                   "owner": "0x16a4eC779ec71F9019fF79CbdD082a078C9eA06A",
@@ -102,7 +115,7 @@ describe("Uniswap V4 Indexer", { timeout: NETWORK_TIMEOUT_MS }, () => {
             },
             "block": 24240005,
             "chainId": 1,
-            "eventsProcessed": 12,
+            "eventsProcessed": 11,
           },
         ],
       }
