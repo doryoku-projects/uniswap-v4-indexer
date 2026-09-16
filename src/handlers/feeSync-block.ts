@@ -45,15 +45,16 @@
  *    is the reported hourly stall's second half, and separating the two
  *    watermarks is the fix.
  *
- * 2. It reads only IN-RANGE positions. An out-of-range position accrues no new
- *    fees, so its uncollected amount is exactly zero and no read is needed.
- *    Ponder applies the same rule but only AFTER reading, because it needs
- *    `getSlot0` to learn the tick. Envio has the tick from events, so the
- *    in-range set is known before any RPC and the read is proportional to it.
+ * 2. It reads EVERY active position, in range or not — and this is where it now
+ *    departs from Ponder rather than copying it. Ponder skips out-of-range
+ *    positions on the grounds that they accrue no new fees. True, and beside the
+ *    point: a position that leaves its range KEEPS whatever it accrued while it
+ *    was in range, and the contract pays that out in full at its next settle.
+ *    Measured on Avalanche, the skip reported 0 for all 639 out-of-range live
+ *    positions while 237 of them held real fees. See the note at the read site.
  *
  * 3. It self-heals `liquidity` from the chain for the positions it reads, as
- *    Ponder does — but only for IN-RANGE ones, since those are the only ones it
- *    reads. See the note at the write site.
+ *    Ponder does — which, per (2), is now all of them. See the write site.
  *
  * 4. It is bounded per firing. Ponder selects every active position with no
  *    limit, and once one firing exceeds its interval each further interval
@@ -66,9 +67,10 @@ import { indexer } from "envio";
 import { getPositionFeeGrowthBatch } from "../effects/positionState";
 import { calculateUncollectedFees } from "../utils/fees";
 import { convertTokenToDecimal } from "../utils/index";
-import { currentAmounts, isDegenerate, isInRange } from "../utils/positions";
+import { currentAmounts, isDegenerate } from "../utils/positions";
 import { v4AddressesFor } from "../utils/v4Addresses";
 import { headAtStartup, isAtChainHead } from "../utils/chainHead";
+import { assertRpcUrlsConfigured } from "../utils/rpc";
 import { feeSweepChainIds } from "../utils/v4Addresses";
 import { activeChainIds } from "../utils/chains";
 
@@ -130,6 +132,44 @@ const SWEEP_INTERVAL_BLOCKS: Readonly<Record<number, number>> = {
  */
 const SWEEP_BATCH_SIZE = 400;
 const SWEEP_CHUNK = 400;
+
+/*
+ * REFUSE TO START if an indexed chain has no configured RPC endpoint.
+ *
+ * Placed here because this module is loaded once per process, before any event
+ * is handled, and it already does module-load startup work — so the failure
+ * lands at boot rather than after a chain has silently accumulated zero fees for
+ * hours. See `assertRpcUrlsConfigured` for why this is fatal rather than a
+ * warning; the short version is that a public fallback cannot serve
+ * `debug_traceTransaction`, and the resulting zero collected fees are
+ * indistinguishable from a position that earned nothing while the indexer
+ * reports 100% synced.
+ *
+ * Scoped to `activeChainIds()` — the chains this config actually indexes — so a
+ * commented-out chain costs nothing. An unreadable config yields an empty set
+ * and skips the gate, matching how the head probe below degrades: this must not
+ * be the thing that blocks a run for a reason unrelated to RPCs.
+ *
+ * WHY `process.exit` AND NOT A BARE THROW. Envio auto-loads handler files and
+ * CATCHES what they throw: a rejected module logs
+ * "Failed to auto-load handler file: src/handlers/feeSync-block.ts" and the
+ * indexer carries on. Measured — it had already printed "Starting indexing!"
+ * before the error appeared. A throw here therefore produces the worst possible
+ * outcome: the run proceeds with THIS handler silently absent, so the fee sweep
+ * never registers at all and `totalFeesUncollected` is never written on any
+ * chain. Exiting is the only halt the loader cannot swallow.
+ *
+ * The assertion itself still throws rather than exiting, so it stays pure and
+ * unit-testable; only this call site turns that into a process exit.
+ */
+try {
+  assertRpcUrlsConfigured(activeChainIds());
+} catch (e) {
+  // stderr, not context.log: no handler context exists at module load, and this
+  // must be legible in a bare cloud log.
+  console.error(`\nFATAL: ${e instanceof Error ? e.message : String(e)}\n`);
+  process.exit(1);
+}
 
 /*
  * The chain heads as of process start, used as a `_gte` floor below.
@@ -295,29 +335,40 @@ indexer.onBlock(
 
     if (candidates.length === 0) return;
 
-    // Partition before any RPC: an out-of-range position provably has zero
-    // uncollected fees, so it needs no read at all.
+    /*
+     * EVERY candidate is read — being out of range is NOT a reason to skip one.
+     *
+     * This used to partition here and write a hard zero for anything out of
+     * range, on the stated reasoning that "an out-of-range position provably has
+     * zero uncollected fees". That is false. Out of range a position stops
+     * ACCRUING, but it keeps everything it accrued while it was in range until a
+     * modifyLiquidity settles it, and the contract pays that out in full at the
+     * next settle.
+     *
+     * Measured on Avalanche: all 639 out-of-range live positions reported 0, and
+     * 237 of them were holding real fees — 29.5 AVAX, 290 USDt, 286 USDC among
+     * them. Replaying 10 settlements where the position was out of range at the
+     * time, the formula in `calculateUncollectedFees` reproduced the payout in
+     * the transaction trace exactly, 10/10.
+     *
+     * The other half of the old reasoning — that an out-of-range read returns a
+     * near-2^256 value and the diff is an astronomical artifact — mistook v4's
+     * intended arithmetic for corruption. The accumulators are unchecked uint256
+     * and wrap by design, which is why `calculateUncollectedFees` now subtracts
+     * modulo 2^256 rather than clamping a "negative" leg to zero.
+     *
+     * The cost is real and accepted: the read set is no longer pre-filtered, so
+     * a sweep issues more multicalls. `POSITIONS_PER_BATCH` still bounds the
+     * width, and reporting zero fees on a quarter of live positions is not a
+     * throughput saving worth having.
+     */
     const toRead: typeof candidates = [];
-    let zeroed = 0;
     let skipped = 0;
 
     for (const position of candidates) {
       const pool = await context.Pool.get(`${chainId}_${position.poolId}`);
       if (!pool) {
         skipped += 1;
-        continue;
-      }
-      const poolTick = pool.tick ?? 0n;
-
-      if (!isInRange(position.tickLower, position.tickUpper, poolTick)) {
-        zeroed += 1;
-        context.Position.set({
-          ...position,
-          totalFeesUncollected0: convertTokenToDecimal(0n, 0n),
-          totalFeesUncollected1: convertTokenToDecimal(0n, 0n),
-          feesUpdatedAtBlock: blockNumber,
-          feesUpdatedAtTimestamp: sweptAt,
-        });
         continue;
       }
       toRead.push(position);
@@ -458,7 +509,7 @@ indexer.onBlock(
 
     context.log.info(
       `feeSync chain=${chainId} block=${block.number} candidates=${candidates.length} ` +
-        `read=${read} failed=${failed} zeroed-out-of-range=${zeroed} skipped=${skipped}`,
+        `read=${read} failed=${failed} skipped=${skipped}`,
     );
   },
 );

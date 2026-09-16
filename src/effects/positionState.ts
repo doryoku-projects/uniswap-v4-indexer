@@ -403,3 +403,104 @@ export const getFeeGrowthInside = createEffect(
     }
   },
 );
+
+/**
+ * The POSITION'S OWN fee-growth checkpoint, for ONE position at ONE block.
+ *
+ * WHY THIS EXISTS RATHER THAN REUSING `getFeeGrowthInside`.
+ *
+ * The two read quantities that are equal most of the time and diverge exactly
+ * when it matters. `getFeeGrowthInside(poolId, tickLower, tickUpper)` is a
+ * POOL-level number sampled at the END of the block. `getPositionInfo`'s
+ * `feeGrowthInside0/1LastX128` is what `Position.update` wrote MID-transaction,
+ * for this position, on this event — the contract persists the exact value it
+ * just used to compute `feesAccrued`.
+ *
+ * They differ in two situations, and both are real on Avalanche:
+ *
+ *   1. Something moved the range later in the same block — another swap, or
+ *      another position's modify. The end-of-block pool read then reflects
+ *      growth this position never checkpointed. Measured: 4 open positions
+ *      (tokenIds 228, 291, 195, 196) carry a baseline AHEAD of the contract's,
+ *      so their next settle silently under-counts. tokenId 228 loses 13.725
+ *      Volta this way.
+ *   2. A full burn cleared the tick pair. `getFeeGrowthInside` afterwards is
+ *      meaningless — 53 of 127 closed Avalanche positions read exactly 0 — so
+ *      the stored baseline becomes garbage. Inert while liquidity is 0, but it
+ *      is the same read that used to gate the trace, where 0 == 0 was
+ *      indistinguishable from "no fee accrued".
+ *
+ * Reading the position's own checkpoint removes both by construction: there is
+ * no sampling instant to get wrong, because the value IS the checkpoint.
+ *
+ * `liquidity` comes back for free and is returned as a cross-check — it is the
+ * contract's post-event liquidity for this position, so a disagreement with the
+ * event-derived figure means a missed or double-applied ModifyLiquidity.
+ *
+ * Same caching rules as the read above: keyed on (chain, pool, ticks, salt,
+ * block) so a replay asks the identical question, and a FAILED read is never
+ * persisted — `ok: false` means "unknown", and the caller must carry the
+ * previous baseline forward rather than treat it as zero.
+ */
+export const getPositionInfoAt = createEffect(
+  {
+    name: "getPositionInfoAt",
+    input: S.schema({
+      chainId: S.number,
+      stateView: S.string,
+      poolId: S.string,
+      owner: S.string,
+      tickLower: S.number,
+      tickUpper: S.number,
+      salt: S.string,
+      blockNumber: S.bigint,
+    }),
+    output: S.schema({
+      ok: S.boolean,
+      liquidity: S.bigint,
+      feeGrowthInside0LastX128: S.bigint,
+      feeGrowthInside1LastX128: S.bigint,
+    }),
+    cache: true,
+    // Matches `getFeeGrowthInside` deliberately: this read replaces it
+    // one-for-one on the same events, so it inherits the same batch width and
+    // the same measured reasoning. See the long note above that limiter before
+    // changing this number — it is a request-SIZE knob, not just a rate knob.
+    rateLimit: { calls: 200, per: "second" },
+  },
+  async ({ context, input }) => {
+    try {
+      const [liquidity, fg0, fg1] = (await stateClient(input.chainId).readContract({
+        address: input.stateView as `0x${string}`,
+        abi: STATE_VIEW_ABI,
+        functionName: "getPositionInfo",
+        args: [
+          input.poolId as `0x${string}`,
+          input.owner as `0x${string}`,
+          input.tickLower,
+          input.tickUpper,
+          input.salt as `0x${string}`,
+        ],
+        blockNumber: input.blockNumber,
+      })) as readonly [bigint, bigint, bigint];
+      return {
+        ok: true,
+        liquidity,
+        feeGrowthInside0LastX128: fg0,
+        feeGrowthInside1LastX128: fg1,
+      };
+    } catch (e) {
+      // Not cached, and not a measured zero — see the note on the sibling read.
+      // The caller keeps the PREVIOUS baseline rather than advancing it, because
+      // advancing to an unread value would make the next settle diff against a
+      // number the contract never wrote.
+      context.cache = false;
+      context.log.warn(
+        `getPositionInfoAt failed for pool ${input.poolId} salt ${input.salt} at block ` +
+          `${input.blockNumber}: ${e instanceof Error ? e.message : String(e)} — ` +
+          `fee-growth baseline carried forward unchanged`,
+      );
+      return { ok: false, liquidity: 0n, feeGrowthInside0LastX128: 0n, feeGrowthInside1LastX128: 0n };
+    }
+  },
+);

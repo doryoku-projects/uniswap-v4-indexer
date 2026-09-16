@@ -268,3 +268,60 @@ describe("activeChainIds — which chains config.yaml actually indexes", () => {
     for (const id of commented) expect(active.has(id)).toBe(false);
   });
 });
+
+describe("pool.feeTier must come from the PoolKey, never from a Swap", () => {
+  /*
+   * `Initialize.fee` and `Swap.fee` are DIFFERENT QUANTITIES that share a name.
+   *
+   *   Initialize.fee = PoolKey.fee              — the pool's LP fee
+   *   Swap.fee       = the effective fee paid   — LP fee PLUS the protocol fee,
+   *                    composed by ProtocolFeeLibrary.calculateSwapFee as
+   *                    protocolFee + lpFee - (protocolFee * lpFee) / 1e6
+   *
+   * The swap handler used to overwrite `feeTier` with `Swap.fee` on every swap,
+   * which stores an inflated number on any pool with a protocol fee set.
+   * Measured on mainnet against `StateView.getSlot0().lpFee`: 150000 stored as
+   * 150850, 200000 as 200800, 80000 as 80920, 79600 as 80521 — each matching
+   * the formula exactly at a 0.1% protocol fee.
+   *
+   * It is not cosmetic downstream. The Tickwise backend compares this value
+   * against a 50,000-pip ceiling to classify a pool as a fee honeypot and then
+   * ZEROES ITS TVL, so a legitimate pool at lpFee 49,900 inflates past the line
+   * and silently disappears from the dataset.
+   *
+   * A source assertion rather than a behavioural one, deliberately: the bug is
+   * the PRESENCE of an assignment, and the handler needs a live pool row, a
+   * bundle and price state to run at all. This is the same shape as the
+   * POSITION_MANAGERS check above.
+   */
+  const readFileSync = require("node:fs").readFileSync;
+
+  it("swap-handler.ts never assigns feeTier", () => {
+    const src = readFileSync("src/handlers/swap-handler.ts", "utf8") as string;
+    // Strip block and line comments so the explanatory note above the fix, which
+    // necessarily mentions the field, cannot satisfy or trip the check.
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+    const assignments = [...code.matchAll(/(^|[^.\w])feeTier\s*:/g)];
+    expect(
+      assignments.length,
+      "swap-handler.ts assigns feeTier — Swap.fee is the protocol-fee-inclusive " +
+        "effective fee, not PoolKey.fee. Per-swap effective fee belongs on Swap.fee.",
+    ).toBe(0);
+  });
+
+  it("initialize-handler.ts is the one place that does assign it", () => {
+    // The counterpart: proving the swap handler does not write it is only
+    // meaningful if something still does, otherwise feeTier would be dead.
+    const src = readFileSync("src/handlers/initialize-handler.ts", "utf8") as string;
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+    expect([...code.matchAll(/(^|[^.\w])feeTier\s*:/g)].length).toBeGreaterThan(0);
+  });
+
+  it("Swap still records its own effective fee, so nothing is lost", () => {
+    // The per-swap number is genuinely useful (it is what a dynamic-fee pool
+    // actually charged); it just is not `pool.feeTier`. schema.graphql keeps it.
+    const schema = readFileSync("schema.graphql", "utf8") as string;
+    const swapType = schema.slice(schema.indexOf("type Swap"), schema.indexOf("type PoolManager"));
+    expect(swapType).toMatch(/^\s*fee:\s*BigInt!/m);
+  });
+});

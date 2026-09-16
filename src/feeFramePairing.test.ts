@@ -511,26 +511,31 @@ describe("traceGateCanPass — what still must NOT be traced", () => {
      * than the measured 1.6x on chain 43114.
      */
     expect(
-      traceGateCanPass({ hadPosition: false, storedLiquidity: 0n, liquidityDelta: 1_000_000n }),
+      traceGateCanPass({ hadPosition: false, storedLiquidity: 0n, liquidityDelta: 1_000_000n , storeBehind: false }),
     ).toBe(false);
   });
 
   it("a top-up of a position the store has never seen still traces nothing", () => {
     expect(
-      traceGateCanPass({ hadPosition: false, storedLiquidity: 0n, liquidityDelta: 5n }),
+      traceGateCanPass({ hadPosition: false, storedLiquidity: 0n, liquidityDelta: 5n , storeBehind: false }),
     ).toBe(false);
   });
 
   it("a closed position being re-minted traces nothing", () => {
     expect(
-      traceGateCanPass({ hadPosition: true, storedLiquidity: 0n, liquidityDelta: 5n }),
+      traceGateCanPass({ hadPosition: true, storedLiquidity: 0n, liquidityDelta: 5n , storeBehind: false }),
     ).toBe(false);
   });
 
   it("traces every settlement of a position that HELD liquidity, whatever the delta", () => {
     for (const liquidityDelta of [-5n, 0n, 5n]) {
       expect(
-        traceGateCanPass({ hadPosition: true, storedLiquidity: 1n, liquidityDelta }),
+        traceGateCanPass({
+          hadPosition: true,
+          storedLiquidity: 1n,
+          liquidityDelta,
+          storeBehind: false,
+        }),
       ).toBe(true);
     }
   });
@@ -540,11 +545,57 @@ describe("traceGateCanPass — what still must NOT be traced", () => {
     // reverts — so the stored 0 is proof the store is behind, not proof there
     // are no fees.
     expect(
-      traceGateCanPass({ hadPosition: true, storedLiquidity: 0n, liquidityDelta: -1n }),
+      traceGateCanPass({ hadPosition: true, storedLiquidity: 0n, liquidityDelta: -1n , storeBehind: false }),
     ).toBe(true);
     expect(
-      traceGateCanPass({ hadPosition: false, storedLiquidity: 0n, liquidityDelta: -1n }),
+      traceGateCanPass({ hadPosition: false, storedLiquidity: 0n, liquidityDelta: -1n , storeBehind: false }),
     ).toBe(true);
+  });
+
+  it("FORCES a trace on the HEAL path, where the store is known to be behind", () => {
+    /*
+     * The gap this conjunct closes. On a heal the row is rebuilt from a stub, so
+     * `hadPosition` is false (`poolId` is still "") and `storedLiquidity` is 0 —
+     * and `storeLiquidityDesynced` only fires on a NEGATIVE delta. So the two
+     * cases below would skip the trace although the chain really settled fees:
+     * an increase on a position that already holds on-chain liquidity, and a
+     * pure collect.
+     *
+     * That loss never self-heals. The head sweep re-reads `liquidity` from the
+     * contract, but nothing revisits `totalFeesCollected0/1`, so a missed frame
+     * is missed permanently.
+     */
+    for (const liquidityDelta of [0n, 5n, 1_000_000n]) {
+      expect(
+        traceGateCanPass({
+          hadPosition: false,
+          storedLiquidity: 0n,
+          liquidityDelta,
+          storeBehind: false,
+        }),
+      ).toBe(false); // the bug: a stub skips
+      expect(
+        traceGateCanPass({
+          hadPosition: false,
+          storedLiquidity: 0n,
+          liquidityDelta,
+          storeBehind: true,
+        }),
+      ).toBe(true); // the fix: the caller's proof overrides
+    }
+  });
+
+  it("does not let `storeBehind` disturb the normal path", () => {
+    // It must only ever ADD a trace. A mint on a healthy store still skips,
+    // which is what keeps the gate affordable.
+    expect(
+      traceGateCanPass({
+        hadPosition: false,
+        storedLiquidity: 0n,
+        liquidityDelta: 1_000_000n,
+        storeBehind: false,
+      }),
+    ).toBe(false);
   });
 
   it("takes no pool price state, so `degenerate` cannot be re-added as a conjunct", () => {
@@ -557,7 +608,7 @@ describe("traceGateCanPass — what still must NOT be traced", () => {
     expect(traceGateCanPass.length).toBe(1);
     expect(
       // @ts-expect-error — no pool-state argument exists to gate on.
-      traceGateCanPass({ hadPosition: true, storedLiquidity: 1n, liquidityDelta: 0n, degenerate: true }),
+      traceGateCanPass({ hadPosition: true, storedLiquidity: 1n, liquidityDelta: 0n, degenerate: true , storeBehind: false }),
     ).toBe(true);
   });
 });

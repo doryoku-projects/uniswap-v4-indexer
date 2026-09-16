@@ -627,13 +627,21 @@ export function getChainConfig(chainId: EvmChainId): ChainConfig {
  * Resolved relative to this MODULE, not the working directory, so it does not
  * depend on where the process was launched from. Unreadable config returns an
  * empty set, and callers must treat that as "unknown" rather than "none".
+ *
+ * `ENVIO_CONFIG` overrides the filename, because `envio dev --config X` runs a
+ * DIFFERENT chain set than `config.yaml` describes. Reading the default file
+ * during such a run reports chains this process is not indexing, which is the
+ * precise failure this function exists to prevent — the startup head probe
+ * would fire RPC at endpoints the run never touches. `scripts/dev.mjs` already
+ * accepts the same variable.
  */
 let activeChainIdsCache: ReadonlySet<number> | undefined;
 export function activeChainIds(): ReadonlySet<number> {
   if (activeChainIdsCache) return activeChainIdsCache;
   const out = new Set<number>();
   try {
-    const path = new URL("../../config.yaml", import.meta.url);
+    const configFile = process.env.ENVIO_CONFIG?.trim() || "config.yaml";
+    const path = new URL(`../../${configFile.replace(/^.*\//, "")}`, import.meta.url);
     const text = readFileSync(path, "utf8");
     let inChains = false;
     for (const raw of text.split("\n")) {

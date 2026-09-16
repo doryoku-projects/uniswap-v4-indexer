@@ -28,14 +28,24 @@ import { toFunctionSelector } from "viem";
 
 const ADDRESS = "0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42" as const;
 const CHAIN = 42161;
+// Metadata is read AT a block, never at the chain head — a backfill reaches a
+// token millions of blocks after the event that introduced it, and `latest`
+// would make the stored values a function of when the indexer ran rather than
+// of the range it indexed. Any block works here; the mocks ignore it.
+const BLOCK = 297_842_872n;
 
-/** Every ERC-20 read the multicall makes, each independently controllable. */
+/**
+ * Every ERC-20 read the multicall makes, each independently controllable.
+ *
+ * The reads take the viem call options, because the multicall pins them to a
+ * block — see the block-pinning test at the bottom of this file.
+ */
 interface Reads {
-  name: () => Promise<unknown>;
-  NAME: () => Promise<unknown>;
-  symbol: () => Promise<unknown>;
-  SYMBOL: () => Promise<unknown>;
-  decimals: () => Promise<unknown>;
+  name: (opts?: unknown) => Promise<unknown>;
+  NAME: (opts?: unknown) => Promise<unknown>;
+  symbol: (opts?: unknown) => Promise<unknown>;
+  SYMBOL: (opts?: unknown) => Promise<unknown>;
+  decimals: (opts?: unknown) => Promise<unknown>;
 }
 
 const ok = <T,>(v: T) => () => Promise.resolve(v);
@@ -72,7 +82,7 @@ describe("decimals resolution — the flag and the cache gate", () => {
     const { fetchTokenMetadataMulticall } = await load(HEALTHY);
 
     const context = ctx();
-    const meta = await fetchTokenMetadataMulticall(ADDRESS, CHAIN, context);
+    const meta = await fetchTokenMetadataMulticall(ADDRESS, CHAIN, context, BLOCK);
 
     expect(meta.decimals).toBe(6);
     expect(meta.decimalsResolved).toBe(true);
@@ -86,7 +96,7 @@ describe("decimals resolution — the flag and the cache gate", () => {
     });
 
     const context = ctx();
-    const meta = await fetchTokenMetadataMulticall(ADDRESS, CHAIN, context);
+    const meta = await fetchTokenMetadataMulticall(ADDRESS, CHAIN, context, BLOCK);
 
     // The defect this gate closed: the gate was a three-way AND, so a transient
     // decimals() failure with name()/symbol() succeeding — as here — WAS cached.
@@ -111,7 +121,7 @@ describe("decimals resolution — the flag and the cache gate", () => {
     });
 
     const context = ctx();
-    const meta = await fetchTokenMetadataMulticall(ADDRESS, CHAIN, context);
+    const meta = await fetchTokenMetadataMulticall(ADDRESS, CHAIN, context, BLOCK);
 
     // decimals() answered, so the number is real and the flag says so — even
     // though the all-reads-failed rule still keeps the cosmetic fallbacks out of
@@ -130,7 +140,7 @@ describe("decimals resolution — the flag and the cache gate", () => {
     });
 
     const context = ctx();
-    const meta = await fetchTokenMetadataMulticall(ADDRESS, CHAIN, context);
+    const meta = await fetchTokenMetadataMulticall(ADDRESS, CHAIN, context, BLOCK);
 
     // The contract answered; 18 is the canonical treatment of a value that would
     // crash the indexer, not a guess about an unknown. Deterministic, so
@@ -294,5 +304,65 @@ describe("bytes32 name/symbol — the fallback that never fired", () => {
     expect(names).not.toContain("NAME");
     expect(names).not.toContain("SYMBOL");
     expect(new Set(names).size).toBe(names.length);
+  });
+});
+
+describe("metadata is read AT a block, never at the chain head", () => {
+  /*
+   * The defect: the reads passed no block, so viem resolved them against
+   * `latest`. In a backfill the indexer reaches a token millions of blocks after
+   * the event that introduced it, so the stored values described the chain at
+   * whatever moment the process happened to get there — not the range being
+   * indexed. Two runs over the same blocks could disagree.
+   *
+   * Measured on Avalanche: 0xa25eaf2906fa1a3a13edac9b9657108af7b703e3 was stored
+   * as stAVAX / "Hypha Staked AVAX" while the contract answered ggAVAX /
+   * "GoGoPool Liquid Staking Token" at the start block, mid-range and at the
+   * boundary. Those stored values are what it returns only at `latest`.
+   *
+   * `decimals` travels the same path, and it is a DIVISOR — a proxy that changed
+   * it between the indexed block and head would mis-scale every historical
+   * amount derived from that token by a power of ten, silently.
+   */
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it("passes blockNumber to every ERC-20 read", async () => {
+    const seen: unknown[] = [];
+    const capture = <T,>(v: T) => (opts?: unknown) => {
+      seen.push(opts);
+      return Promise.resolve(v);
+    };
+
+    vi.doMock("viem", () => ({
+      createPublicClient: () => ({}),
+      http: () => ({}),
+      getContract: () => ({
+        read: {
+          name: capture("USD Coin"),
+          symbol: capture("USDC"),
+          decimals: capture(6),
+        },
+      }),
+    }));
+    const { fetchTokenMetadataMulticall } = await import("./utils/tokenMetadata");
+
+    const meta = await fetchTokenMetadataMulticall(
+      ADDRESS,
+      CHAIN,
+      { cache: true, log: { warn: vi.fn() } },
+      BLOCK,
+    );
+
+    expect(meta.decimals).toBe(6);
+
+    // Five reads: name and symbol against each ABI variant, plus decimals.
+    expect(seen.length).toBe(5);
+    // THE ASSERTION. Every one of them must carry the block; an `undefined`
+    // here is a read resolved against `latest`.
+    for (const opts of seen) {
+      expect(opts).toEqual({ blockNumber: BLOCK });
+    }
   });
 });
