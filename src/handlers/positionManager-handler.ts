@@ -27,6 +27,14 @@ indexer.onEvent(
     // change ownership. A Transfer can arrive BEFORE the first ModifyLiquidity,
     // so seed a complete zeroed row and let that handler fill in the pool,
     // ticks and amounts when it comes.
+    //
+    // THIS SEED IS THE ROW THE 12 BASE STUBS WERE. It is still written, and it
+    // still must be — dropping it would lose ownership for a position whose
+    // liquidity event has not arrived yet. What changed is on the other side:
+    // `newPosition()` leaves `lastModifyBlock`/`lastModifyLogIndex` at zero, so
+    // modifyLiquidity-handler treats every liquidity event as still owed to this
+    // row and fills it in even on a re-processed range, where it used to return
+    // above its own `Position.set` and leave this seed as the final state.
     const position =
       (await context.Position.get(id)) ??
       newPosition({

@@ -245,7 +245,9 @@ sweep reads only positions that can actually have accrued.
 **`updatedAtBlock` and `feesUpdatedAtBlock` are separate on purpose.** Ponder has one column for
 both, and because the backend watches it as a change feed, every fee sweep there presents the whole
 active set as changed and triggers thousands of pointless refreshes. The fee sweep here writes only
-the fee watermark.
+the fee watermark. A THIRD watermark, `lastModifyBlock`/`lastModifyLogIndex`, is written by
+`modifyLiquidity-handler` alone and says which liquidity event the row's running sums contain — see
+"Replaying a committed range" below for what it is for.
 
 ### Choosing which chains run
 
@@ -486,6 +488,45 @@ publishing edge-of-domain artifacts; `feeGrowthInside0/1LastX128` are actually m
 stale-set query uses `_lte` so the real cadence matches the configured interval; and the
 sweep sorts by watermark, since `getWhere` has no ordering and the documented
 "oldest fee-read first" rotation was otherwise fiction.
+
+### Replaying a committed range: skip the shared sums, heal the position
+
+The entity write and the progress write are not atomic, so a restart can resume from a checkpoint
+BEHIND the last commit and apply a whole range twice. On 2026-09-16 that happened on chain 4663
+(blocks 6,686,659..6,695,055) and overstated **170 of 40,641** positions, 65 of them exactly 2x.
+Rows keyed on `chainId_txHash_logIndex` — `ModifyLiquidity`, `PositionTransaction` — came out
+correct, because a plain `set` overwrites; everything of the shape `existing.x + delta` doubled.
+
+`modifyLiquidity-handler` and `swap-handler` therefore detect a replay by reading the one keyed row
+the event is guaranteed to have written. **What a replay skips are the SHARED accumulators** —
+`Tick.liquidityGross/Net`, `Pool.liquidity`/TVL/`txCount`, the `PoolManager` and `Token`
+aggregates, and every day/hour rollup. Nothing on those rows says which events they already
+contain, so the only safe answer is not to touch them.
+
+**A replay does NOT skip the position row**, and that distinction is the fix for a second defect
+the first version of the guard caused. Its bare `return` sat above `Position.set`, so on a
+re-processed range the only handler still writing the row was the PositionManager `Transfer`
+handler — whose write is `newPosition()` spread with an owner: `poolId: ""`, `liquidity: 0`,
+`isActive: false`. Measured on the live rebuild: **12 chain-8453 positions** frozen as that stub
+(`8453_4032` among them) with complete, correct ledger rows behind them, and **permanently** so —
+the fee sweep skips `poolId === ""`, so a stub is never re-read from chain either. Zero of 16,287
+positions on the other five chains were affected, so this is a re-processed-range signature, not
+an ordering race: the mint `Transfer` at logIndex L and its `ModifyLiquidity` at L+1 come out
+correct 294 times in 301 on the same chain.
+
+A position can answer for itself where a pool cannot, because its whole arithmetic lives on one
+row. `Position.lastModifyBlock` / `lastModifyLogIndex` record the last `ModifyLiquidity` folded
+into that row — written by this handler alone, never by the `Transfer` handler (which moves
+`updatedAtBlock` in the same block as the mint) and never by the fee sweep. A replayed event at or
+below the watermark is already counted and is skipped; one above it is not, whatever the ledger
+rows say, and is applied. A stub sits at `(0, 0)`, so a replayed window rebuilds it event by event
+in order, and it cannot double count: the watermark and the sums it certifies are written in the
+same `Position.set`.
+
+Zero-liquidity positions are **not** filtered anywhere by any of this. A closed position keeps
+`liquidity: 0` with a real `poolId` and real ticks and is still served; that is a state, not a
+defect, and `src/positionReplayHeal.test.ts` asserts it alongside the heal, the no-double-count
+case, and the multi-event window.
 
 ### The fee gate: one predicate, hoisted into the preload pass
 
