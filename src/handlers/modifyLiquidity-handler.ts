@@ -159,6 +159,13 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
         includeUniswapDayData: true,
       }),
       readPositionBaseline(context, feeGateEvent),
+      readFeeGrowthInside(context, feeGateEvent),
+      // The replay guard's own read, warmed here so it is grouped with the rest
+      // of the batch instead of costing one serialized SELECT per event in the
+      // sequential pass. Same id the guard computes below.
+      context.ModifyLiquidity.get(
+        `${event.chainId}_${event.transaction.hash}_${event.logIndex}`,
+      ),
       // Only for a PositionManager caller: a non-attributable event never
       // reaches either read in the real pass, so warming them would be a query
       // spent on nothing.
@@ -184,6 +191,78 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
         : undefined,
     ]);
     return;
+  }
+
+  /*
+   * REPLAY GUARD — everything below this line is NOT idempotent.
+   *
+   * On 2026-09-16 the hosted indexer committed chain 4663 blocks
+   * 6,686,659..6,695,055, restarted three seconds later, and resumed from a
+   * checkpoint one batch BEHIND that commit (6,686,658). The entity write and
+   * the progress write are not atomic, so the whole range was applied twice.
+   *
+   * The damage was entirely in the read-modify-write accumulators, and the
+   * asymmetry is the whole diagnosis: rows keyed on
+   * `chainId_txHash_logIndex` — `ModifyLiquidity`, `PositionTransaction` — are
+   * written with a plain SET, so a second application OVERWRITES them and they
+   * came out correct. Everything of the shape `existing.x + delta` doubled:
+   * `Position.liquidity`, `depositedToken0/1`, `withdrawnToken0/1`,
+   * `totalFeesCollected0/1`, `totalGasCostETH`, `Tick.liquidityGross/Net`,
+   * `Pool.liquidity`/TVL/`txCount`, and every Day/Hour rollup.
+   *
+   * Measured: 170 of 40,641 chain-4663 positions wrong, all OVERSTATED, 65 of
+   * them exactly 2x. 27 are closed on chain but stored `isActive: true` with
+   * balances that no longer exist — and those never self-heal, because a closed
+   * position gets no further events.
+   *
+   * The guard is a keyed read of the one row this event is guaranteed to have
+   * written. Three reasons it is safe, each verified rather than assumed:
+   *
+   *  1. It cannot self-trip in the preload pass: `set` is `noopSet` there
+   *     (UserContext.res.mjs:88,102), so nothing is written before this point.
+   *     It also sits AFTER the preload `return` above, so it never runs twice.
+   *  2. It cannot collide inside a batch: the id carries `logIndex`, so it is
+   *     unique per event.
+   *  3. It does not break a genuine reorg: rollback restores entities to the
+   *     target checkpoint (`InMemoryStore.res.mjs:118` -> `getRollbackData`),
+   *     so the row is gone before the range is legitimately re-processed.
+   *
+   * It must stay HERE — above `Tick.set` at the first write below — and not at
+   * the `ModifyLiquidity.set` further down, or the tick and pool accumulators
+   * are already doubled by the time it fires.
+   *
+   * ─── WHY IT IS A FLAG AND NO LONGER A `return` ────────────────────────────
+   *
+   * The bare `return` closed the doubling and opened a worse hole: it also
+   * skipped `Position.set`, so on a replayed range the ONLY handler left
+   * writing the row was the PositionManager `Transfer` handler — and its write
+   * is `newPosition()` spread with an owner, i.e. `poolId: ""`, `liquidity: 0`,
+   * `isActive: false`. Measured on the live rebuild: 12 chain-8453 positions
+   * (e.g. `8453_4032`) frozen as that stub, each with a CORRECT
+   * `ModifyLiquidity` + `PositionTransaction` ledger behind it, and each one
+   * permanent — the fee sweep filters on `poolId !== ""`
+   * (feeSync-block.ts:292), so a stub is never re-read from chain either.
+   *
+   * So the replay now skips the accumulators it cannot reason about and RUNS
+   * ON to the position block, which CAN reason about itself: `lastModifyBlock`
+   * / `lastModifyLogIndex` on the row record the last ModifyLiquidity folded
+   * into it, so a replayed event is skipped when the row already counted it and
+   * applied when it did not. That asymmetry is not laziness — Pool, Tick and
+   * the day/hour rollups are shared by every position in the pool, so no row of
+   * theirs can say which events it contains, while a position's entire
+   * arithmetic lives on the one row the watermark sits on.
+   */
+  const eventId = `${event.chainId}_${event.transaction.hash}_${event.logIndex}`;
+  const replayed = (await context.ModifyLiquidity.get(eventId)) !== undefined;
+  if (replayed) {
+    context.log.warn(
+      `ModifyLiquidity ${eventId} has already been applied — skipping its ` +
+        `running sums. This is a REPLAY: the indexer is re-processing a range it ` +
+        `already committed. The pool, tick and interval accumulators are NOT ` +
+        `idempotent, so re-applying them would inflate liquidity, TVL and ` +
+        `txCount. The position row is reconciled against its own watermark ` +
+        `below instead of being skipped.`,
+    );
   }
 
   // --- Tick updates ---
@@ -223,9 +302,13 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
     liquidityNet: upperTick.liquidityNet - amount,
   };
 
-  // Save tick entities
-  context.Tick.set(lowerTick);
-  context.Tick.set(upperTick);
+  // Save tick entities. NOT on a replay: `liquidityGross`/`liquidityNet` are
+  // running sums over every position in the pool, and nothing on the tick row
+  // says which events it already contains.
+  if (!replayed) {
+    context.Tick.set(lowerTick);
+    context.Tick.set(upperTick);
+  }
 
   // --- Pool, token, and manager updates ---
   const currTick = existingPool.tick ?? 0n;
@@ -336,15 +419,20 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
   // v4-subgraph/src/mappings/modifyLiquidity.ts:176-182, which discards every
   // return value and has no follow-up mutation block.
   const blockTimestamp = event.block.timestamp;
-  await Promise.all([
-    updateUniswapDayData(context, poolManager, blockTimestamp),
-    updatePoolDayData(context, pool, blockTimestamp),
-    updatePoolHourData(context, pool, blockTimestamp),
-    updateTokenDayData(context, token0, bundle.ethPriceUSD, blockTimestamp),
-    updateTokenHourData(context, token0, bundle.ethPriceUSD, blockTimestamp),
-    updateTokenDayData(context, token1, bundle.ethPriceUSD, blockTimestamp),
-    updateTokenHourData(context, token1, bundle.ethPriceUSD, blockTimestamp),
-  ]);
+  // Skipped on a replay for the same reason as the ticks: every rollup here
+  // bumps a `txCount` and snapshots a TVL that this event already contributed
+  // to once.
+  if (!replayed) {
+    await Promise.all([
+      updateUniswapDayData(context, poolManager, blockTimestamp),
+      updatePoolDayData(context, pool, blockTimestamp),
+      updatePoolHourData(context, pool, blockTimestamp),
+      updateTokenDayData(context, token0, bundle.ethPriceUSD, blockTimestamp),
+      updateTokenHourData(context, token0, bundle.ethPriceUSD, blockTimestamp),
+      updateTokenDayData(context, token1, bundle.ethPriceUSD, blockTimestamp),
+      updateTokenHourData(context, token1, bundle.ethPriceUSD, blockTimestamp),
+    ]);
+  }
 
   // Create ModifyLiquidity entity
   const modifyLiquidityId = `${event.chainId}_${event.transaction.hash}_${event.logIndex}`;
@@ -374,7 +462,7 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
   };
 
   // Check if this is a hooked pool and update HookStats
-  if (isHookedPool && existingHookStats) {
+  if (!replayed && isHookedPool && existingHookStats) {
     // Update the TVL for this hook
     context.HookStats.set({
       ...existingHookStats,
@@ -384,11 +472,17 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
     });
   }
 
-  context.ModifyLiquidity.set(modifyLiquidity);
-  context.PoolManager.set(poolManager);
-  context.Pool.set(pool);
-  context.Token.set(token0);
-  context.Token.set(token1);
+  // `ModifyLiquidity` is keyed on `chainId_txHash_logIndex` and built purely
+  // from the event, so re-setting it is a no-op by construction — it is skipped
+  // only because its presence is what raised `replayed` in the first place. The
+  // four rows after it are accumulators and must not be re-applied.
+  if (!replayed) {
+    context.ModifyLiquidity.set(modifyLiquidity);
+    context.PoolManager.set(poolManager);
+    context.Pool.set(pool);
+    context.Token.set(token0);
+    context.Token.set(token1);
+  }
 
   // ─── Position attribution ──────────────────────────────────────────────────
   //
@@ -514,6 +608,41 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
         timestamp: BigInt(event.block.timestamp),
         blockNumber: BigInt(event.block.number),
       });
+
+    /*
+     * THE REPLAY RECONCILIATION, and the whole reason the guard above is a flag
+     * rather than a `return`.
+     *
+     * `lastModifyBlock`/`lastModifyLogIndex` is the (block, logIndex) of the
+     * last ModifyLiquidity folded into THIS row, written nowhere else — not by
+     * the Transfer handler, not by the fee sweep. Events reach a chain's
+     * handlers in (block, logIndex) order, so the pair is a high-water mark and
+     * the comparison is exact:
+     *
+     *   at or below it  ⇒ this event is already inside these sums. Skip, or the
+     *                     doubling the guard exists to prevent comes back.
+     *   above it        ⇒ this event is NOT in them, whatever the ledger rows
+     *                     say. Apply it. This is the healing case, and it is
+     *                     what a stub row is: `newPosition()` leaves the
+     *                     watermark at (0, 0), so every replayed event is still
+     *                     owed and they re-apply in order onto zeroed sums.
+     *
+     * The stub cannot double count because the watermark and the sums are
+     * written in the SAME `Position.set` below — a row at (0, 0) has had no
+     * ModifyLiquidity arithmetic applied to it at all, by construction.
+     *
+     * Consulted only on a replay. On the normal path the ledger row does not
+     * exist yet, so the event is new by definition and the comparison could only
+     * ever mis-skip a genuine event if two events shared a (block, logIndex).
+     */
+    if (
+      replayed &&
+      (existing.lastModifyBlock > BigInt(event.block.number) ||
+        (existing.lastModifyBlock === BigInt(event.block.number) &&
+          existing.lastModifyLogIndex >= BigInt(event.logIndex)))
+    ) {
+      return;
+    }
 
     const delta = event.params.liquidityDelta;
     const isAdd = delta > 0n;
@@ -869,6 +998,12 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
       // `feesUpdatedAtBlock` is untouched; only the fee sweep owns it.
       updatedAtBlock: BigInt(event.block.number),
       updatedAtTimestamp: BigInt(event.block.timestamp),
+
+      // Stamped in the same write as the sums it certifies: after this row
+      // lands, this event IS in `liquidity`, the cashflow aggregates and the
+      // gas total, and the reconciliation above will say so on any replay.
+      lastModifyBlock: BigInt(event.block.number),
+      lastModifyLogIndex: BigInt(event.logIndex),
     };
     context.Position.set(nextPosition);
 

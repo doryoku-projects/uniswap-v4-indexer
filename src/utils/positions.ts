@@ -232,5 +232,13 @@ export function newPosition(args: {
     // otherwise would make the first sweep think this row was already current.
     feesUpdatedAtBlock: 0n,
     feesUpdatedAtTimestamp: 0n,
+
+    // Zero, and it MUST be zero rather than the current block: this row has had
+    // no ModifyLiquidity folded into it yet, so every replayed liquidity event
+    // is still owed to it. Stamping the current block here would tell the
+    // replay guard that a stub had already been counted and freeze it forever —
+    // the exact defect the watermark exists to end. See schema.graphql.
+    lastModifyBlock: 0n,
+    lastModifyLogIndex: 0n,
   };
 }

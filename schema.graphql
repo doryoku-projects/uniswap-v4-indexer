@@ -217,6 +217,25 @@ type Position @storage(postgres: true) {
   feesUpdatedAtBlock: BigInt! @index
   feesUpdatedAtTimestamp: BigInt!
 
+  # ─── Replay watermark: the LAST ModifyLiquidity folded into THIS row ───────
+  # `(block, logIndex)` of the last ModifyLiquidity whose non-idempotent
+  # arithmetic — `liquidity`, the deposited/withdrawn/fee/gas sums — was applied
+  # to this row. Written ONLY by modifyLiquidity-handler, never by the Transfer
+  # handler or the fee sweep, which is exactly what makes it usable: it answers
+  # "has this event already been counted into THIS position?" where
+  # `updatedAtBlock` cannot, because a Transfer moves that in the same block as
+  # the mint's ModifyLiquidity.
+  #
+  # It is what lets a re-processed range HEAL a position instead of freezing it.
+  # The replay guard skips the shared accumulators (Pool, Tick, day/hour
+  # rollups) because nothing can prove whether those were applied; a position's
+  # aggregates all live on one row, so this pair proves it per event. Zero on a
+  # fresh row, so a row that lost its ModifyLiquidity writes — the 12 stub
+  # positions on Base, `poolId: ""` with a correct ledger behind them — rebuilds
+  # from the replayed events in order, with no double count.
+  lastModifyBlock: BigInt!
+  lastModifyLogIndex: BigInt!
+
   # derived fields
   subscriptions: [Subscribe!]! @derivedFrom(field: "position")
   unsubscriptions: [Unsubscribe!]! @derivedFrom(field: "position")
