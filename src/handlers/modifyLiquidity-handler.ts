@@ -252,7 +252,12 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
    * arithmetic lives on the one row the watermark sits on.
    */
   const eventId = `${event.chainId}_${event.transaction.hash}_${event.logIndex}`;
-  const replayed = (await context.ModifyLiquidity.get(eventId)) !== undefined;
+  // The row is KEPT, not just tested for existence: it carries this event's
+  // `amount0`/`amount1` as computed on the first pass, against the pool price as
+  // it stood AT the event. That is the only surviving record of that price, and
+  // the heal path below needs it. See AMOUNTS ON A REPLAY.
+  const priorLedgerRow = await context.ModifyLiquidity.get(eventId);
+  const replayed = priorLedgerRow !== undefined;
   if (replayed) {
     context.log.warn(
       `ModifyLiquidity ${eventId} has already been applied — skipping its ` +
@@ -327,9 +332,44 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
     event.params.liquidityDelta,
     currSqrtPriceX96
   );
-  // Convert to proper decimals
-  const amount0 = convertTokenToDecimal(amount0Raw, existingToken0.decimals);
-  const amount1 = convertTokenToDecimal(amount1Raw, existingToken1.decimals);
+  /*
+   * ─── AMOUNTS ON A REPLAY ──────────────────────────────────────────────────
+   *
+   * `currTick`/`currSqrtPriceX96` above are the POOL ROW's price, which is
+   * maintained from Initialize and Swap logs rather than read per event. That is
+   * deliberate and it is what Ponder does too (`apps/v4/src/index.ts:179`,
+   * "log-maintained price (Initialize + Swap)"); neither indexer calls getSlot0
+   * per event.
+   *
+   * It is correct exactly while events are processed in order, once. On a REPLAY
+   * it is not: envio re-delivers a committed range WITHOUT reverting the rows it
+   * wrote, so the pool row here is from AHEAD of the event being re-processed and
+   * these formulas price the change at a tick that had not happened yet. A
+   * deposit re-priced after the market left the range books its whole value on
+   * one side — which is the `withdrawnToken0 > 0` with `depositedToken0 == 0`
+   * shape, money out with no money in.
+   *
+   * Ponder never hits this because its store REVERTS: `revertOmnichain` /
+   * `revertMultichain` (ponder/dist/esm/database/actions.js:187,216) delete every
+   * reorg-table row `WHERE checkpoint > <checkpoint>` and restore the prior
+   * values, so by the time a handler re-runs, `pool.tick` is the tick as of the
+   * event again. Envio has no such rollback, so the correction has to be here.
+   *
+   * THE FIRST PASS ALREADY RECORDED THE RIGHT NUMBERS. `ModifyLiquidity` is keyed
+   * on `chainId_txHash_logIndex` and carries `amount0`/`amount1` (schema.graphql:
+   * 342-343) written from the pool price at the event — and it is the very row
+   * whose presence raised `replayed`. So take them from it rather than recomputing
+   * against a price from the future. Same sign convention: the row stores the
+   * value SIGNED by liquidityDelta, exactly as this local is.
+   *
+   * Not an RPC and not a schema change — the data was always there, just unread.
+   */
+  const amount0 = priorLedgerRow
+    ? priorLedgerRow.amount0
+    : convertTokenToDecimal(amount0Raw, existingToken0.decimals);
+  const amount1 = priorLedgerRow
+    ? priorLedgerRow.amount1
+    : convertTokenToDecimal(amount1Raw, existingToken1.decimals);
 
   // Calculate amountUSD based on token prices
   const amountUSD = amount0
@@ -715,10 +755,16 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
      * liquidity, and the skip would then "prove" a settlement has no fees using
      * a number already known to be wrong.
      *
-     * `existing.liquidity === 0n && liquidityDelta < 0n` is IMPOSSIBLE on-chain
-     * — the PoolManager cannot remove liquidity from a position that has none;
-     * it reverts — so observing it is proof the STORE is behind, not proof about
-     * the position. Trace it.
+     * `existing.liquidity === 0n && liquidityDelta <= 0n` is the desync escape
+     * hatch. For `< 0n` the proof is direct: the PoolManager cannot remove
+     * liquidity from a position that has none; it reverts. So observing it is
+     * proof the STORE is behind, not proof about the position.
+     *
+     * `== 0n` IS INCLUDED, AND NARROWING IT BACK TO `< 0n` IS A CORRECTNESS
+     * REGRESSION, not a tightening. A stored zero that is already known to be
+     * wrong cannot prove anything about a pure collect either, and pure collects
+     * are 69.9% of fee-bearing settlements. Pinned in
+     * `feeFramePairing.test.ts`. Trace both.
      */
     const gateCanPass = traceGateCanPass({
       hadPosition,
@@ -785,7 +831,6 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
     if (shouldTraceFees({ gateCanPass })) {
       const [fees, modifyRowsThisTx] = await Promise.all([
         context.effect(getFeesAccrued, {
-          chainId: event.chainId,
           txHash: event.transaction.hash,
           poolManager: chainConfig.poolManagerAddress,
         }),
@@ -888,6 +933,28 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
      * (MIN_TICK) with sqrtPrice 4295128740 (MIN_SQRT_RATIO+1). Both indexers
      * already agreed `isPriceable: false`, but Ponder's DEPOSIT row reads
      * amount0 = 0 where this port read 6.753059.
+     */
+    /*
+     * UNCONDITIONAL, and an `&& !replayed` conjunct here was tried and REVERTED.
+     *
+     * The tempting argument is that a replayed `amount0` is the first pass's own
+     * value and was already guarded, so guarding again against a stale-ahead
+     * `degenerate` could zero a number measured on a healthy pool. THE PREMISE IS
+     * FALSE. The ledger row is written from the UNGUARDED local — `amount0:
+     * amount0` at the ModifyLiquidity literal above — and the guard is applied
+     * only to this separate pair, exactly as the comment above says it
+     * deliberately does. So on a degenerate pool the row holds the astronomical
+     * artifact while the Position row correctly holds 0, and skipping the guard
+     * on a replay hands that artifact straight back: measured 6.753059 into
+     * `depositedToken0` on a row simultaneously stamped `isPriceable: false` and
+     * `amount0: 0`, against 0 on the first pass.
+     *
+     * `degenerate` is a property of the POOL, not of the pass. The substitution
+     * above is what makes the replay correct — `amount0` is now the event-time
+     * value instead of a stale-ahead recomputation — and this guard stays on top
+     * of it unchanged. Ponder computes one guarded value and feeds it to both the
+     * aggregates and the ledger row (`apps/v4/src/index.ts:244`); this port split
+     * them on purpose, so the split must be respected on the replay path too.
      */
     const posAmount0 = degenerate ? ZERO_BD : amount0;
     const posAmount1 = degenerate ? ZERO_BD : amount1;

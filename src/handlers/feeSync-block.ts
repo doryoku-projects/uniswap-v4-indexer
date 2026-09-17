@@ -330,7 +330,6 @@ indexer.onBlock(
     for (let start = 0; start < toRead.length; start += SWEEP_CHUNK) {
       const chunk = toRead.slice(start, start + SWEEP_CHUNK);
       const states = await context.effect(getPositionFeeGrowthBatch, {
-        chainId,
         stateView: addresses.stateView,
         positionManager: addresses.positionManager,
         multicall3: addresses.multicall3,

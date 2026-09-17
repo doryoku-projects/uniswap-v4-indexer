@@ -135,8 +135,8 @@ const PositionInput = S.schema({
 export const getPositionFeeGrowthBatch = createEffect(
   {
     name: "getPositionFeeGrowthBatch",
+    // No `chainId` — chain-scoped, so the chain is the table, not a key field.
     input: S.schema({
-      chainId: S.number,
       stateView: S.string,
       positionManager: S.string,
       multicall3: S.string,
@@ -169,9 +169,24 @@ export const getPositionFeeGrowthBatch = createEffect(
     cache: false,
     // One call per CHUNK now, not per position, so this bounds chunks.
     rateLimit: { calls: 20, per: "second" },
+    /*
+     * Per-chain, matching `getFeesAccrued`. `crossChain` defaults to TRUE,
+     * which puts every chain through ONE shared 20/s window, so chains sweeping
+     * in parallel contend for the same allowance. The input already carries
+     * `chainId` and each chain reads its own StateView over its own endpoint,
+     * so a shared window buys nothing but contention.
+     *
+     * FREE HERE, UNLIKE THE CACHED EFFECTS. Scope is encoded in the effect
+     * cache table NAME (`Internal.res.mjs:222-228`), so re-scoping a cached
+     * effect strands every row it has already written. This effect is
+     * `cache: false` — see the block above, which is not a preference — so it
+     * owns no cache table and the flip costs nothing to strand.
+     */
+    crossChain: false,
   },
   async ({ context, input }) => {
-    const { chainId, stateView, positionManager, multicall3, blockNumber, positions } = input;
+    const chainId = context.chain.id;
+    const { stateView, positionManager, multicall3, blockNumber, positions } = input;
     const failed = positions.map((p) => ({
       tokenId: p.tokenId,
       ok: false,
@@ -293,8 +308,8 @@ export const getPositionFeeGrowthBatch = createEffect(
 export const getFeeGrowthInside = createEffect(
   {
     name: "getFeeGrowthInside",
+    // No `chainId` — chain-scoped, so the chain is the table, not a key field.
     input: S.schema({
-      chainId: S.number,
       stateView: S.string,
       poolId: S.string,
       tickLower: S.number,
@@ -363,21 +378,35 @@ export const getFeeGrowthInside = createEffect(
      * five chains, so anyone testing locally is aiming this at keyless public
      * endpoints that will reject a wide batch long before a paid tier would.
      *
-     * DO NOT "FIX" THE SHARING WITH `crossChain: false`. The effect cache table
-     * is `id` + `output` only (`Internal.res.mjs:315-320`) and its NAME encodes
-     * the scope — `envio_effect_<name>` when crossChain, `envio_<chainId>_
-     * effect_<name>` when not (`Internal.res.mjs:222-228`, and the same split
-     * for the .tsv cache at :295-301). Re-scoping this effect therefore points
-     * it at a DIFFERENT table and silently orphans every row already cached, so
-     * every historical `getFeeGrowthInside` would be re-read from the node.
-     * `rateLimit` is runtime-only and has no cache identity, which is exactly
-     * why it is the safe knob here.
+     * THE SHARING IS GONE — this effect is now `crossChain: false`, so 200/s is
+     * PER CHAIN rather than split across every syncing chain. That also makes
+     * the "five uncommented chains" arithmetic above historical: it explains how
+     * the number was derived, not what it now means. The per-chain measurement
+     * it was derived FROM (~145-240 qualifying events per batch, per chain) is
+     * what still applies, so 200 remains the right size and the body width is
+     * unchanged at min(200, queue depth).
+     *
+     * This re-scope was NOT free and was taken deliberately during a
+     * from-scratch rebuild. The cache table NAME encodes the scope —
+     * `envio_effect_<name>` when crossChain, `envio_<chainId>_effect_<name>`
+     * when not (`Internal.res.mjs:222-228`, same split for the .tsv at
+     * :296-301) — so the flip stranded every row previously cached under the
+     * flat name. Do not flip it back and forth; each flip costs the whole cache.
      */
     rateLimit: { calls: 200, per: "second" },
+    /*
+     * Chain-scoped, like every other effect here. Two reasons beyond the rate
+     * limit: it makes the persisted cache identity a property of THIS FILE
+     * rather than of `config.yaml`'s `disable_default_cross_chain` (which
+     * upstream sets, and which would otherwise strand this cache silently on a
+     * merge), and it is what makes `context.chain.id` readable in the handler —
+     * accessing it on a cross-chain effect throws (envio/index.d.ts:66-68).
+     */
+    crossChain: false,
   },
   async ({ context, input }) => {
     try {
-      const [fg0, fg1] = (await stateClient(input.chainId).readContract({
+      const [fg0, fg1] = (await stateClient(context.chain.id).readContract({
         address: input.stateView as `0x${string}`,
         abi: STATE_VIEW_ABI,
         functionName: "getFeeGrowthInside",

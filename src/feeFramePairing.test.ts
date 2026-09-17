@@ -547,6 +547,39 @@ describe("traceGateCanPass — what still must NOT be traced", () => {
     ).toBe(true);
   });
 
+  it("FORCES a trace on a PURE COLLECT against a desynced store, not only a withdraw", () => {
+    /*
+     * The desync clause was `storedLiquidity === 0n && liquidityDelta < 0n`, so
+     * it covered withdrawals only. A pure collect (delta == 0) against the same
+     * known-bad row fell through to `hadPosition && storedLiquidity > 0n`,
+     * failed it, and had its fee recorded as ZERO with no log line of any level.
+     *
+     * Pure collects are 69.9% of fee-bearing settlements — the same share that
+     * made the old `liquidityDelta < 0n` trace gate cover barely a third of the
+     * Avalanche damage. And a row clamped to 0 drops out of the fee sweep's
+     * candidate filter, so nothing re-reads it from chain: the loss is permanent
+     * against an append-only `totalFeesCollected`.
+     *
+     * A zero-liquidity position can genuinely still hold uncollected fees, so
+     * this traces on its own merits rather than merely defensively.
+     */
+    expect(
+      traceGateCanPass({ hadPosition: true, storedLiquidity: 0n, liquidityDelta: 0n }),
+    ).toBe(true);
+    expect(
+      traceGateCanPass({ hadPosition: false, storedLiquidity: 0n, liquidityDelta: 0n }),
+    ).toBe(true);
+  });
+
+  it("still does NOT trace a mint, which is what keeps the widening honest", () => {
+    // The widening is to `<= 0n`, not to "any delta". A mint has no prior
+    // position and provably no fees; letting it through would be the
+    // over-tracing the gate exists to avoid.
+    expect(
+      traceGateCanPass({ hadPosition: false, storedLiquidity: 0n, liquidityDelta: 1n }),
+    ).toBe(false);
+  });
+
   it("takes no pool price state, so `degenerate` cannot be re-added as a conjunct", () => {
     /*
      * A degenerate pool's TICK MATH is meaningless and the handler still zeroes

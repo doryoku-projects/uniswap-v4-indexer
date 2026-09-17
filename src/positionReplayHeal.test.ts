@@ -228,6 +228,158 @@ afterAll(() => {
   vi.unstubAllGlobals();
 });
 
+/**
+ * A Pool row as it would stand AFTER Initialize and a mint had been committed —
+ * the state a replay arrives on top of. Seeded directly because
+ * `createTestIndexer` refuses to rewind (`startBlock must be greater than
+ * previously processed endBlock`), which is the same reason the ModifyLiquidity
+ * replay tests below seed a ledger row instead of re-processing a range.
+ */
+const SEEDED_LIQUIDITY = 2760743263836633442467n;
+const SEEDED_TXCOUNT = 7n;
+
+const seedPool = (ix: ReturnType<typeof createTestIndexer>) =>
+  (ix as unknown as { Pool: { set: (row: unknown) => void } }).Pool.set({
+    id: `${CHAIN}_${POOL_ID}`,
+    chainId: BigInt(CHAIN),
+    name: "ETH / USDC - 0.3%",
+    createdAtTimestamp: 1738000000n,
+    createdAtBlockNumber: BigInt(INIT_BLOCK),
+    token0: `${CHAIN}_0x0000000000000000000000000000000000000000`,
+    token1: `${CHAIN}_0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48`,
+    feeTier: 3000n,
+    liquidity: SEEDED_LIQUIDITY,
+    sqrtPrice: 79228162514264337593543950336n,
+    token0Price: new BigDecimal("1"),
+    token1Price: new BigDecimal("1"),
+    tick: 0n,
+    tickSpacing: 60n,
+    observationIndex: 0n,
+    volumeToken0: new BigDecimal("5"),
+    volumeToken1: new BigDecimal("5"),
+    volumeUSD: new BigDecimal("5"),
+    untrackedVolumeUSD: new BigDecimal("0"),
+    feesUSD: new BigDecimal("1"),
+    feesUSDUntracked: new BigDecimal("0"),
+    txCount: SEEDED_TXCOUNT,
+    collectedFeesToken0: new BigDecimal("1"),
+    collectedFeesToken1: new BigDecimal("1"),
+    collectedFeesUSD: new BigDecimal("1"),
+    totalValueLockedToken0: new BigDecimal("8.269406017330364631"),
+    totalValueLockedToken1: new BigDecimal("8.269406017330364631"),
+    totalValueLockedETH: new BigDecimal("16"),
+    totalValueLockedUSD: new BigDecimal("16"),
+    totalValueLockedUSDUntracked: new BigDecimal("0"),
+    liquidityProviderCount: 1n,
+    hooks: "0x0000000000000000000000000000000000000000",
+  });
+
+describe("replayed Initialize and the Pool row", () => {
+  /*
+   * `initialize-handler.ts` is the one write-heavy handler that does not
+   * accumulate: it OVERWRITES the Pool row with a fresh zeroed literal. So the
+   * replay failure mode is not doubling, it is ERASURE — and nothing puts it
+   * back, because `modifyLiquidity-handler.ts` wraps its `Pool.set` in
+   * `if (!replayed)` and `swap-handler.ts` returns outright. Before the guard
+   * this left the pool at liquidity 0 / txCount 0 permanently, with tick and
+   * sqrtPrice rewound to the initialize values, feeding every position's
+   * `currentAmounts` and the fee sweep's in-range partition.
+   */
+  it("does not zero a pool when a committed Initialize is re-delivered", async () => {
+    const ix = createTestIndexer();
+    seedPool(ix);
+
+    await process(ix, INIT_BLOCK, INIT_BLOCK, [initialize]);
+
+    const after = await pool(ix);
+    expect(after?.liquidity).toBe(SEEDED_LIQUIDITY);
+    expect(after?.txCount).toBe(SEEDED_TXCOUNT);
+  });
+
+  it("does not re-increment poolCount when a committed Initialize is re-delivered", async () => {
+    /*
+     * The guard sits ABOVE the PoolManager/HookStats/Token reads for this
+     * reason: those are `+ 1n` accumulators and two of them write before the
+     * preload return, so a guard placed lower would spare the Pool row and
+     * still double the counters.
+     */
+    const ix = createTestIndexer();
+    seedPool(ix);
+
+    const managerOf = () =>
+      (ix as unknown as {
+        PoolManager: { get: (id: string) => Promise<{ poolCount: bigint } | undefined> };
+      }).PoolManager.get(`${CHAIN}_${POOL_MGR}`);
+
+    await process(ix, INIT_BLOCK, INIT_BLOCK, [initialize]);
+
+    // The handler never ran, so it never created a PoolManager row at all.
+    // Had it run, this would be 1n — a pool counted twice across the replay.
+    expect(await managerOf()).toBeUndefined();
+  });
+});
+
+describe("replayed amounts come from the ledger row, not the moved pool", () => {
+  /*
+   * `currTick`/`currSqrtPriceX96` in the handler are the POOL ROW's price,
+   * maintained from Initialize and Swap logs rather than read per event. Ponder
+   * does the same (`apps/v4/src/index.ts:179`). It is correct while events run in
+   * order once — and wrong on a replay, because envio re-delivers a committed
+   * range WITHOUT reverting the rows it wrote, so the pool row is from AHEAD of
+   * the event being re-processed.
+   *
+   * Re-pricing a deposit at a tick that had not happened yet books its whole
+   * value on one side. That is the `withdrawnToken0 > 0` with
+   * `depositedToken0 == 0` shape. The fix reads `amount0`/`amount1` off the
+   * surviving `ModifyLiquidity` row, which the first pass wrote at the right
+   * price and whose presence is what raises `replayed` in the first place.
+   */
+  const LEDGER_AMOUNT0 = "8.269406017330364631";
+
+  /** Shove the pool far out of the position's -60/60 range, as a swap would. */
+  const movePoolOutOfRange = async (ix: ReturnType<typeof createTestIndexer>) => {
+    const p = (await pool(ix)) as unknown as Record<string, unknown>;
+    (ix as unknown as { Pool: { set: (row: unknown) => void } }).Pool.set({
+      ...p,
+      tick: 200000n,
+      sqrtPrice: 1744244129640337381386292603617837n,
+    });
+  };
+
+  it("books a healed deposit at the price it happened at, not the price it replayed at", async () => {
+    const ix = createTestIndexer();
+    await process(ix, INIT_BLOCK, INIT_BLOCK, [initialize]);
+
+    // The first pass committed its ledger row and then the write was lost.
+    seedLedger(ix, ledgerRow(1738000012, MINT_LOG_INDEX, TX, DELTA));
+    // ...and the market moved on before the range was re-processed.
+    await movePoolOutOfRange(ix);
+
+    await process(ix, MINT_BLOCK, MINT_BLOCK, [mintTransfer, mintModify]);
+
+    const p = await position(ix);
+    // Recomputing against tick 200000 would put the whole deposit on token1 and
+    // leave depositedToken0 at 0 — money out with no money in, once a withdraw
+    // lands on the same row.
+    expect(p?.depositedToken0.toString()).toBe(LEDGER_AMOUNT0);
+    expect(p?.liquidity).toBe(DELTA);
+  });
+
+  it("still prices a NON-replayed event from the pool row", async () => {
+    // The substitution must be keyed on the ledger row existing, not applied
+    // unconditionally — a first-pass event has no row to read and must keep
+    // using the live pool price.
+    const ix = createTestIndexer();
+    await process(ix, INIT_BLOCK, INIT_BLOCK, [initialize]);
+
+    await process(ix, MINT_BLOCK, MINT_BLOCK, [mintTransfer, mintModify]);
+
+    const p = await position(ix);
+    expect(p?.depositedToken0.toString()).toBe(LEDGER_AMOUNT0);
+    expect(p?.liquidity).toBe(DELTA);
+  });
+});
+
 describe("replayed ModifyLiquidity and the Position row", () => {
   it("rebuilds a position whose ModifyLiquidity write was lost but whose ledger row survived", async () => {
     const ix = createTestIndexer();

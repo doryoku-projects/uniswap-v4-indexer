@@ -23,6 +23,62 @@ indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event
     return;
   }
 
+  /*
+   * REPLAY GUARD. A restart can resume from a checkpoint BEHIND the last
+   * commit and re-deliver a range that was already applied — observed
+   * 2026-09-16 on chain 4663. NOT a torn batch commit: envio 3.7.0 pushes
+   * `Checkpoints.insert` onto the same `setOperations` array as the entity
+   * writes and awaits them inside one `Postgres.beginSql`
+   * (`PgStorage.res:1249-1303`); only `updatedEffectsCache` is outside, and
+   * says so. Cause unestablished; what is certain is that re-delivery happens
+   * and nothing is rolled back.
+   *
+   * THIS HANDLER IS THE DESTRUCTIVE ONE. It does not accumulate into the Pool
+   * row — it OVERWRITES it with a fresh zeroed literal (`liquidity: 0n`,
+   * `txCount: 0n`, zeroed volume/TVL/collectedFees) and rewinds `tick` and
+   * `sqrtPrice` to the initialize values. Re-running it therefore does not
+   * double a pool, it ERASES one.
+   *
+   * And nothing puts it back. `modifyLiquidity-handler.ts` wraps its own
+   * `Pool.set` in `if (!replayed)` and `swap-handler.ts` returns outright, so
+   * once those two see the replay they decline to re-accumulate onto the row
+   * this handler just zeroed. `tick`, `sqrtPrice` and `liquidity` do recover —
+   * `swap-handler.ts` ASSIGNS all three from event params, so the first Swap
+   * after the replay window heals them, and until it arrives the rewound values
+   * feed `currentAmounts` for every position in the pool and the fee sweep's
+   * in-range partition. Permanently lost are the accumulated fields the same
+   * write leaves untouched: `txCount`, `volumeToken0/1`, `volumeUSD`, `feesUSD`,
+   * `collectedFees*`, `totalValueLocked*`, `liquidityProviderCount`.
+   *
+   * WHY THE POOL ROW IS THE MARKER. `Initialize` fires exactly once per pool on
+   * chain, and this is the ONLY handler that creates a Pool row — the other two
+   * `Pool.set` sites both read the row first and bail when it is absent
+   * (`modifyLiquidity-handler.ts:73` `if (!existingPool) return;`, and swap
+   * reads it at :25). So an existing row means this event has already been
+   * applied. No separate marker entity is needed.
+   *
+   * Placed ABOVE the PoolManager/HookStats/Token reads on purpose: those three
+   * are `+ 1n` accumulators (`poolCount`, `numberOfPools`, `hookedPools`) and
+   * two of them write before the preload return, so a guard further down would
+   * let the counters double even when the Pool row was spared.
+   *
+   * Real pass only. Every `set` is a no-op during preload, so there is nothing
+   * to protect there, and returning early would skip the token and interval
+   * warming the real pass depends on.
+   */
+  const alreadyInitialized = await context.Pool.get(
+    `${event.chainId}_${event.params.id}`
+  );
+  if (alreadyInitialized && !context.isPreload) {
+    context.log.warn(
+      `Initialize ${event.chainId}_${event.params.id} has already been applied — skipping. ` +
+        `This is a REPLAY: the indexer is re-processing a range it already committed. ` +
+        `Re-running this handler would overwrite the pool with a zeroed row and ` +
+        `re-increment poolCount/numberOfPools.`,
+    );
+    return;
+  }
+
   // Define isHookedPool at the start
   const isHookedPool =
     event.params.hooks !== "0x0000000000000000000000000000000000000000";
@@ -97,10 +153,10 @@ indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event
   const token0Id = `${event.chainId}_${event.params.currency0.toLowerCase()}`;
   let token0 = await context.Token.get(token0Id);
   if (!token0) {
-    const metadata = await context.effect(getTokenMetadata, {
-      address: event.params.currency0,
-      chainId: event.chainId,
-    });
+    const metadata = await context.effect(
+      getTokenMetadata,
+      event.params.currency0,
+    );
     token0 = {
       id: token0Id,
       chainId: BigInt(event.chainId),
@@ -132,10 +188,10 @@ indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event
   const token1Id = `${event.chainId}_${event.params.currency1.toLowerCase()}`;
   let token1 = await context.Token.get(token1Id);
   if (!token1) {
-    const metadata = await context.effect(getTokenMetadata, {
-      address: event.params.currency1,
-      chainId: event.chainId,
-    });
+    const metadata = await context.effect(
+      getTokenMetadata,
+      event.params.currency1,
+    );
     token1 = {
       id: token1Id,
       chainId: BigInt(event.chainId),

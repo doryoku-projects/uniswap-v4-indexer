@@ -20,6 +20,8 @@ import {
   type FeeGateEvent,
 } from "./utils/feeGate";
 import { getFeeGrowthInside, getPositionFeeGrowthBatch } from "./effects/positionState";
+import { getFeesAccrued } from "./effects/feesAccrued";
+import { getTokenMetadata } from "./utils/tokenMetadata";
 import { TickMath } from "./utils/liquidityMath/tickMath";
 
 /** Avalanche, whose PositionManager is the one the tokenId-137 case ran through. */
@@ -108,12 +110,16 @@ describe("feeGate — one predicate for the preload pass and the real path", () 
     expect(d.tokenId).toBe(137n);
     expect(d.read).toBe(true);
     expect(d.effectInput).toMatchObject({
-      chainId: AVALANCHE,
       poolId: POOL_ID,
       tickLower: -887220,
       tickUpper: 887220,
       blockNumber: 57816979n,
     });
+    // NO `chainId`. The effect is chain-scoped, so the chain is the cache table
+    // and the .tsv directory; the handler reads it from `context.chain.id`.
+    // Putting it back would partition rows INSIDE one file instead of across
+    // files, and would change every cache key.
+    expect(d.effectInput).not.toHaveProperty("chainId");
     // The StateView must actually resolve, or every read degrades to ok:false
     // and every event traces.
     expect(d.effectInput?.stateView).toMatch(/^0x[0-9a-f]{40}$/);
@@ -315,13 +321,42 @@ describe("effect options that are load-bearing rather than cosmetic", () => {
     expect(inside.rateLimit!.callsPerDuration).toBeLessThanOrEqual(250);
   });
 
-  it("getFeeGrowthInside keeps its cache and its crossChain scope", () => {
-    // NOT because crossChain: true is better — because the cache table name
-    // encodes the scope (`Internal.res.mjs:222-228`), so flipping it silently
-    // ORPHANS every cached row. `rateLimit` is the runtime-only knob; this
-    // makes the scope an explicit decision rather than an accident.
+  it("getFeeGrowthInside is cached and CHAIN-SCOPED", () => {
+    /*
+     * Was `crossChain` undefined — i.e. inherited from `config.defaultCrossChain`
+     * — which made this cache's identity a property of config.yaml rather than of
+     * its own source, so upstream's `disable_default_cross_chain: true` would
+     * strand it on a merge with no error. Now stated locally.
+     *
+     * The scope is also what makes `context.chain.id` readable in the handler:
+     * it THROWS on a cross-chain effect (envio/index.d.ts:66-68). So reverting
+     * this line breaks the handler, not just the cache path.
+     *
+     * Flipping it is never free — the table NAME encodes the scope
+     * (`Internal.res.mjs:222-228`), so each flip strands every cached row.
+     */
     expect(inside.defaultShouldCache).toBe(true);
-    expect(inside.crossChain).toBeUndefined();
+    expect(inside.crossChain).toBe(false);
+  });
+
+  it("EVERY effect is chain-scoped, and none carries chainId in its key", () => {
+    /*
+     * The two halves are one invariant. Chain-scoped puts each chain's rows in
+     * its own table and its own `<chainId>/` .tsv directory; dropping `chainId`
+     * from the input stops it ALSO being a key field, where it only partitioned
+     * rows inside a single flat file. A new effect that keeps `chainId` in its
+     * input silently reintroduces the flat-file shape.
+     */
+    const effects = [
+      ["getFeeGrowthInside", inside],
+      ["getPositionFeeGrowthBatch", batch],
+      ["getFeesAccrued", getFeesAccrued as unknown as EffectInternals],
+      ["getTokenMetadata", getTokenMetadata as unknown as EffectInternals],
+    ] as const;
+
+    for (const [name, e] of effects) {
+      expect(e.crossChain, `${name} must declare crossChain: false`).toBe(false);
+    }
   });
 
   it("getPositionFeeGrowthBatch must stay uncached", () => {

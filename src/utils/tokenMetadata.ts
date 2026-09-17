@@ -126,15 +126,31 @@ function sanitizeString(str: string): string {
 export const getTokenMetadata = createEffect(
   {
     name: "getTokenMetadata",
-    input: S.tuple((t) => ({
-      address: t.item(0, S.address),
-      chainId: t.item(1, S.number as S.Schema<EvmChainId>),
-    })),
+    // Just the address. `chainId` USED to be item 1 of a tuple, which put it in
+    // the cache key and so in the row id of ONE flat `getTokenMetadata.tsv`.
+    // Under `crossChain: false` the chain is already the table and the file
+    // directory (`envio_<chainId>_effect_<name>`, `<chainId>/<name>.tsv`), so
+    // carrying it in the key too was redundant — it partitioned the rows inside
+    // a file instead of across files. Read it from `context.chain.id` instead.
+    input: S.address,
     output: TokenMetadata,
     rateLimit: false,
     cache: true,
+    /*
+     * Chain-scoped. This effect declared NOTHING before, so its scope came from
+     * `config.defaultCrossChain` — meaning its persisted cache identity was a
+     * property of config.yaml rather than of this file, and any flip of
+     * `disable_default_cross_chain` silently stranded it. Stating it here makes
+     * the identity local and stable.
+     *
+     * `context.chain.id` is only readable on a chain-scoped effect; it THROWS on
+     * a cross-chain one (envio/index.d.ts:66-68). So this declaration and the
+     * `input: S.address` above are one change, not two.
+     */
+    crossChain: false,
   },
-  async ({ context, input: { address, chainId } }) => {
+  async ({ context, input: address }) => {
+    const chainId = context.chain.id as EvmChainId;
     // Handle native token
     if (address.toLowerCase() === ADDRESS_ZERO.toLowerCase()) {
       const chainConfig = getChainConfig(chainId);

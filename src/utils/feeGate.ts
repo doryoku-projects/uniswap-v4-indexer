@@ -86,7 +86,8 @@ export interface FeeGateEvent {
 
 /** The exact `getFeeGrowthInside` input, built in one place so both passes agree. */
 export interface FeeGrowthEffectInput {
-  readonly chainId: number;
+  // No `chainId`. `getFeeGrowthInside` is chain-scoped, so the chain is the
+  // cache table and the handler reads it from `context.chain.id`.
   readonly stateView: string;
   readonly poolId: string;
   readonly tickLower: number;
@@ -151,7 +152,8 @@ export function feeGate(e: FeeGateEvent): FeeGateDecision {
     tokenId,
     read: true,
     effectInput: {
-      chainId: e.chainId,
+      // No `chainId`: `getFeeGrowthInside` is chain-scoped, so the chain is the
+      // cache table, and the handler reads it from `context.chain.id`.
       // `?? ""` rather than a skip, matching the call site this replaced: a
       // chain with no StateView produces a failing read, which returns
       // `ok: false` and therefore FORCES the trace. Skipping would instead
@@ -283,17 +285,36 @@ export function shouldTraceFees(args: { readonly gateCanPass: boolean }): boolea
  *    positive-delta majority of ModifyLiquidity off the trace path and is why
  *    the widened gate costs at most 1.6x rather than 100x.
  *
- *  - `storedLiquidity === 0n && liquidityDelta < 0n`: impossible on-chain — the
- *    PoolManager reverts a decrease against a position with no liquidity — so
- *    seeing it proves the STORE is behind (the handler clamps a negative running
- *    liquidity to 0 and warns). The skip above would otherwise "prove" no fees
- *    from a number already known to be wrong, so this forces the trace.
+ *  - `storedLiquidity === 0n && liquidityDelta <= 0n`: the stored zero cannot be
+ *    trusted, so it must not be used to prove there are no fees.
+ *
+ *    For `< 0n` the proof is direct: a decrease against a position with no
+ *    liquidity is impossible on-chain — the PoolManager reverts it — so seeing
+ *    one proves the STORE is behind (the handler clamps a negative running
+ *    liquidity to 0 and warns).
+ *
+ *    `== 0n` IS INCLUDED DELIBERATELY, AND WAS THE BUG. It was `< 0n`, which
+ *    covered only withdrawals, so a pure collect against the same known-bad row
+ *    fell through to `hadPosition && storedLiquidity > 0n`, failed it, and had
+ *    its fee recorded as zero with no log line of any level. Pure collects are
+ *    69.9% of fee-bearing settlements — the same share that made the old
+ *    `liquidityDelta < 0n` gate cover barely a third of the Avalanche damage.
+ *    Once a row is clamped to 0 it also drops out of the fee sweep's candidate
+ *    filter, so nothing ever re-reads it from chain: the loss is permanent and
+ *    `totalFeesCollected` is append-only.
+ *
+ *    The justification is the DESYNC, not the position: a stored zero already
+ *    known to be wrong cannot prove "no fees" for a collect any more than it can
+ *    for a withdraw. (Do not lean on "a zero-liquidity position can still hold
+ *    uncollected fees" — v4 settles fees on the burn that takes liquidity to
+ *    zero, and a cleared tick pair then reads exactly (0, 0).) Cost is bounded:
+ *    `getFeesAccrued` is cached per TRANSACTION, so a batch is one trace.
  */
 export function traceGateCanPass(args: {
   readonly hadPosition: boolean;
   readonly storedLiquidity: bigint;
   readonly liquidityDelta: bigint;
 }): boolean {
-  const storeLiquidityDesynced = args.storedLiquidity === 0n && args.liquidityDelta < 0n;
+  const storeLiquidityDesynced = args.storedLiquidity === 0n && args.liquidityDelta <= 0n;
   return (args.hadPosition && args.storedLiquidity > 0n) || storeLiquidityDesynced;
 }

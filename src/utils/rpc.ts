@@ -37,7 +37,7 @@ export const getRpcUrl = (chainId: number): string => {
     case 7777777:
       return process.env.ENVIO_ZORA_RPC_URL || "https://zora.drpc.org";
     case 1868:
-      return process.env.ENVIO_SONIEUM_RPC_URL || "https://sonieum.drpc.org";
+      return process.env.ENVIO_SONIEUM_RPC_URL || "https://soneium.drpc.org";
     case 130:
       return process.env.ENVIO_UNICHAIN_RPC_URL || "https://unichain.drpc.org";
     case 57073:

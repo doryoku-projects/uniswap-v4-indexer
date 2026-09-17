@@ -364,8 +364,10 @@ const FeesBySalt = S.array(
 export const getFeesAccrued = createEffect(
   {
     name: "getFeesAccrued",
+    // No `chainId`: the effect is chain-scoped, so the chain is already the cache
+    // table and the .tsv directory. Carrying it in the key too only partitioned
+    // rows INSIDE one file. Read from `context.chain.id` below.
     input: S.schema({
-      chainId: S.number,
       txHash: S.string,
       poolManager: S.string,
     }),
@@ -383,7 +385,8 @@ export const getFeesAccrued = createEffect(
     // but contention.
     crossChain: false,
   },
-  async ({ context, input: { chainId, txHash, poolManager } }) => {
+  async ({ context, input: { txHash, poolManager } }) => {
+    const chainId = context.chain.id;
     const pm = poolManager.toLowerCase();
     const client = traceClient(chainId);
 
