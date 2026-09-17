@@ -1,0 +1,841 @@
+id	output
+"0x0000000000000000000000000000000000000000"	{"name": "Ethereum", "symbol": "ETH", "decimals": 18, "decimalsResolved": true}
+"0xbaFf6b6098aAec5430F81C01d52626A65f48955D"	{"name": "test7", "symbol": "test7", "decimals": 18, "decimalsResolved": true}
+"0x0769A1FEB4d8197DAe6c066Defdb675627720C36"	{"name": "Robinhood Chain", "symbol": "HOOD", "decimals": 18, "decimalsResolved": true}
+"0x0820320f5530475BdbdCf507959f15A41D16AAFA"	{"name": "h", "symbol": "h", "decimals": 18, "decimalsResolved": true}
+"0x0053a38788F9782017f0f9D98548ACFffb3122DA"	{"name": "test", "symbol": "TEST", "decimals": 18, "decimalsResolved": true}
+"0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73"	{"name": "WETH", "symbol": "WETH", "decimals": 18, "decimalsResolved": true}
+"0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34"	{"name": "USDe", "symbol": "USDe", "decimals": 18, "decimalsResolved": true}
+"0x40858070814a57FdF33a613ae84fE0a8b4a874f7"	{"name": "syrupUSDG", "symbol": "syrupUSDG", "decimals": 6, "decimalsResolved": true}
+"0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"	{"name": "Global Dollar", "symbol": "USDG", "decimals": 6, "decimalsResolved": true}
+"0x020bfC650A365f8BB26819deAAbF3E21291018b4"	{"name": "Cash Cat", "symbol": "CASHCAT", "decimals": 18, "decimalsResolved": true}
+"0x4a0E65A3EcceC6dBe60AE065F2e7bb85Fae35eEa"	{"name": "Space Exploration Technologies Corp. Class A Common Stock • Robinhood Token", "symbol": "SPCX", "decimals": 18, "decimalsResolved": true}
+"0xCB1d0dF927F6C7141d3e0320D2Eb70061A3FED4e"	{"name": "Crucible Platform", "symbol": "PLATFORM", "decimals": 18, "decimalsResolved": true}
+"0x42bcDF8d4116545d04dd5b76F48b614450f18B1B"	{"name": "SmokeV4 Token", "symbol": "SMK4", "decimals": 18, "decimalsResolved": true}
+"0x0cf5817866896371A32f48f215E8c68Ec4184C24"	{"name": "SmokeV4 Token", "symbol": "SMK4", "decimals": 18, "decimalsResolved": true}
+"0xA61B14c20b3fBd26A16507459Ba48658a64bf7Be"	{"name": "test", "symbol": "test", "decimals": 18, "decimalsResolved": true}
+"0xafE1e8D890F9D7b89AFDdc35BC141F96568928Ab"	{"name": "test", "symbol": "test", "decimals": 18, "decimalsResolved": true}
+"0xF1b6530149dAbc8fAa1e328ee5b5137FB295Afbb"	{"name": "test", "symbol": "test", "decimals": 18, "decimalsResolved": true}
+"0xCA45B8606F1aAc794aB763cB4c676DA86Dc27489"	{"name": "HORS", "symbol": "HORS", "decimals": 18, "decimalsResolved": true}
+"0x98c6DfA5d833219e8E47e34E8812dbFC35B21896"	{"name": "Democratize finance for all", "symbol": "DFA", "decimals": 18, "decimalsResolved": true}
+"0x4eABB0ea2E32209935845377425c50AdfA671353"	{"name": "Reuben Hood", "symbol": "HOOD", "decimals": 18, "decimalsResolved": true}
+"0xF748399A0Ef11f32f1452c934647631C3B46fc1b"	{"name": "VT", "symbol": "VT", "decimals": 18, "decimalsResolved": true}
+"0x8a108C3156477A220B3460088B713d640Ae4Ef30"	{"name": "Robinhood Clanker", "symbol": "RCLANKER", "decimals": 18, "decimalsResolved": true}
+"0x49C765b7B7A7f252EB2bCD19fFA49c4cAFd25EBa"	{"name": "STONKS Onchain", "symbol": "STONKS", "decimals": 18, "decimalsResolved": true}
+"0x7494Fd5cd4FcE904FdaEBba2C4D2d54D581E6A08"	{"name": "s", "symbol": "s", "decimals": 18, "decimalsResolved": true}
+"0xDD6dc56fA482bc21a64aB7E709c9692Db8b75e18"	{"name": "d", "symbol": "d", "decimals": 18, "decimalsResolved": true}
+"0xE99E677D5DebbC375E27dcE1193B988b6261D65B"	{"name": "Hollow", "symbol": "HOLLOW", "decimals": 18, "decimalsResolved": true}
+"0x7a6a5CA1014D7940e8DA8FBbad6248438CD3C300"	{"name": "f", "symbol": "f", "decimals": 18, "decimalsResolved": true}
+"0x5e96B65F0266D7295c8686F1f2E147c7d1405f8F"	{"name": "h", "symbol": "h", "decimals": 18, "decimalsResolved": true}
+"0xB13a6d81F88989a489c4AdeF3d2218367D200Dc4"	{"name": "k", "symbol": "k", "decimals": 18, "decimalsResolved": true}
+"0x0e6192C6644eE9c85dCc3e91a8106EA28e7b88E2"	{"name": "CC0 Robinhood Test", "symbol": "CC0RHT", "decimals": 18, "decimalsResolved": true}
+"0xCB0441DceC8624F1C3fDF82aa87C059bF8D1aF70"	{"name": "rookiecoin", "symbol": "ROOKIE", "decimals": 18, "decimalsResolved": true}
+"0x46E488319EA02804EB66DD861C2A06eE93b8d546"	{"name": "TEST", "symbol": "TEST", "decimals": 18, "decimalsResolved": true}
+"0x873e993e2CDa79fc98957f8702Df1D35BCdAa5d3"	{"name": "Feather Coin", "symbol": "FEATHER", "decimals": 18, "decimalsResolved": true}
+"0x66CEF844f82a461444621F1fCb53efA9ed6DeE18"	{"name": "Vled Tenov", "symbol": "TENOV", "decimals": 18, "decimalsResolved": true}
+"0xdcc34bdD5D3C30237303b95D2F59cc29437b5c74"	{"name": "Copper pot of wealth", "symbol": "COOKWARE", "decimals": 18, "decimalsResolved": true}
+"0x8d4dFaaA4198b6486E0293Fec914C2B6a821D4DC"	{"name": "KITSU", "symbol": "KITSU", "decimals": 18, "decimalsResolved": true}
+"0x26879c326b7664F9FeE7fa83E9274EEA800eaD7c"	{"name": "Robinhood AI", "symbol": "CORTEX", "decimals": 18, "decimalsResolved": true}
+"0xa4BD8dEF4b887FD1851DEFe10AcdCf7A84437a88"	{"name": "PepeWifHood", "symbol": "PEPE", "decimals": 18, "decimalsResolved": true}
+"0x01637b14B7378B99dE75A64d50656d98488D9a4d"	{"name": "Lady Marian", "symbol": "MARIAN", "decimals": 18, "decimalsResolved": true}
+"0x79D2234Ed4Ee24880835F261DF9A98FcEfC7600e"	{"name": "The Hood", "symbol": "HOOD", "decimals": 18, "decimalsResolved": true}
+"0xDe7794B38744b7259680f6d54C3910AA2C7D7fB7"	{"name": "CAT AI", "symbol": "catAI", "decimals": 18, "decimalsResolved": true}
+"0x3849B5bC7Db15a1A92fD472F9259c954cA7d4DF5"	{"name": "Rascal", "symbol": "RASCAL", "decimals": 18, "decimalsResolved": true}
+"0x17bb0C898254406b1Ea2e8E99B0C263e26c9E4a4"	{"name": "Dog In Hood", "symbol": "DIH", "decimals": 18, "decimalsResolved": true}
+"0x09eD21F6Add48430349Dd31F0ebcAb9b3340EFE8"	{"name": "SwoleCat", "symbol": "SWOLE", "decimals": 18, "decimalsResolved": true}
+"0x14c0d332B49404DffFE037738188e068de5Cf04e"	{"name": "Reuben Hood", "symbol": "HOOD", "decimals": 18, "decimalsResolved": true}
+"0x7768208f4Ab4facfB6B103225A49aC9328eD72D7"	{"name": "Hoodpeg", "symbol": "hoodPEG", "decimals": 18, "decimalsResolved": true}
+"0xAa8573Fd9a20269cA2D0Cc1253E8a7Fc2256107c"	{"name": "Cat In Hood", "symbol": "CIH", "decimals": 18, "decimalsResolved": true}
+"0xc22f70574B7cAF77150dCa72b2b7E5060ea8c1eE"	{"name": "QUADRILLIONS", "symbol": "QUADRILLIONS", "decimals": 18, "decimalsResolved": true}
+"0xf17Dcdb9b59e83fF55C778E91F91b672698F467D"	{"name": "Fledge", "symbol": "Fledge", "decimals": 18, "decimalsResolved": true}
+"0xA6b50C5D48b98C88104E3B3c1c5461292FE3F38d"	{"name": "HOOD Stock Live Price: $108.09", "symbol": "HOODPRICE", "decimals": 18, "decimalsResolved": true}
+"0x4C9D9527c4E3Cf9FAF70f0df8429d2ccED157492"	{"name": "Dumb Money", "symbol": "DUMBMONEY", "decimals": 18, "decimalsResolved": true}
+"0xAacD055F4d066B2D34C018ecAE888F5Ed2A0083f"	{"name": "THE WHITE MAMBA", "symbol": "THREADGUY", "decimals": 18, "decimalsResolved": true}
+"0x36B4c795d171b713B5f04c4972B83487Ec6A0e8E"	{"name": "Robinfun", "symbol": "ROBINFUN", "decimals": 18, "decimalsResolved": true}
+"0x2806dF9f05848B79c8fb85BE70a33efDb908BCC2"	{"name": "Smoke UR 4663", "symbol": "SMURF", "decimals": 18, "decimalsResolved": true}
+"0x5f8C09Bd252d7C10548518288fE626334877Bb2d"	{"name": "Smoke UR 4663", "symbol": "SMURF", "decimals": 18, "decimalsResolved": true}
+"0x0A4BC9f558c4915ed9EB624c705aC61aA26Cceaf"	{"name": "Smoke UR 4663", "symbol": "SMURF", "decimals": 18, "decimalsResolved": true}
+"0x63CEbA4DD62D6Df577434326aa4AE490E91d2fb6"	{"name": "test1", "symbol": "test1", "decimals": 18, "decimalsResolved": true}
+"0x0725D0bb72845a1E6Be55f5c7773a6e8d360Ad11"	{"name": "test2", "symbol": "test2", "decimals": 18, "decimalsResolved": true}
+"0x00d0706a0EBbB45ff29BB8B7dDb1450166F7a8BB"	{"name": "test3", "symbol": "test3", "decimals": 18, "decimalsResolved": true}
+"0x20C9E16b51f70d7F5976Fe0b149989D53fF0b7B1"	{"name": "test4", "symbol": "test4", "decimals": 18, "decimalsResolved": true}
+"0xe3Ddc5966Fcc57742C1EC840262613b7B3Ab3380"	{"name": "test5", "symbol": "test5", "decimals": 18, "decimalsResolved": true}
+"0x9C1A9A03D0d904f01c1048E8D72312D53b449315"	{"name": "test6", "symbol": "test6", "decimals": 18, "decimalsResolved": true}
+"0x4F504668b04688A3B971aCd5Ca48e636814a9D57"	{"name": "Robinhook", "symbol": "HOOK", "decimals": 18, "decimalsResolved": true}
+"0x79356557aCd4685Ba51c0bC46D9167750569E88e"	{"name": "Robinhook", "symbol": "HOOK", "decimals": 18, "decimalsResolved": true}
+"0xbCddea783F36c4827A4E45d1a26522F96726a2E9"	{"name": "PEPO", "symbol": "PEPO", "decimals": 18, "decimalsResolved": true}
+"0x5905Fb796ed408F41E7601d243574Eff24884482"	{"name": "Fletch Instant Test", "symbol": "FINST", "decimals": 18, "decimalsResolved": true}
+"0xbAa73b7A58FC9C7BeE38E28cB4129092c31e7C3d"	{"name": "OLIVER", "symbol": "QUINN", "decimals": 18, "decimalsResolved": true}
+"0xD5f3879160bc7c32ebb4dC785F8a4F505888de68"	{"name": "Invesco QQQ • Robinhood Token", "symbol": "QQQ", "decimals": 18, "decimalsResolved": true}
+"0x322F0929c4625eD5bAd873c95208D54E1c003b2d"	{"name": "Tesla • Robinhood Token", "symbol": "TSLA", "decimals": 18, "decimalsResolved": true}
+"0x12f190a9F9d7D37a250758b26824B97CE941bF54"	{"name": "Amazon • Robinhood Token", "symbol": "AMZN", "decimals": 18, "decimalsResolved": true}
+"0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3"	{"name": "Alphabet Class A • Robinhood Token", "symbol": "GOOGL", "decimals": 18, "decimalsResolved": true}
+"0x117cc2133c37B721F49dE2A7a74833232B3B4C0C"	{"name": "SPDR S&P 500 ETF Trust • Robinhood Token", "symbol": "SPY", "decimals": 18, "decimalsResolved": true}
+"0x411eFb0E7f985935DAec3D4C3ebaEa0d0AD7D89f"	{"name": "iShares Silver Trust • Robinhood Token", "symbol": "SLV", "decimals": 18, "decimalsResolved": true}
+"0x5f10A1C971B69e47e059e1dC91901B59b3fB49C3"	{"name": "CoreWeave • Robinhood Token", "symbol": "CRWV", "decimals": 18, "decimalsResolved": true}
+"0x2cd0766F98973b2D2010Bd64c6C81798bAa9A6D6"	{"name": "DRACULA", "symbol": "DRACULA", "decimals": 18, "decimalsResolved": true}
+"0x01cb33041500bA454DD4F75F51c121272B768442"	{"name": "Hoodie", "symbol": "HOODIE", "decimals": 18, "decimalsResolved": true}
+"0x364beb456BBC9C1B140Bc3B1590F60834ba05ef0"	{"name": "1MBBLOCK", "symbol": "1M", "decimals": 18, "decimalsResolved": true}
+"0x4FDf3B15C4e34625f8FFa2897dAF5119Ac71C347"	{"name": "Perppad E2E", "symbol": "PPRH", "decimals": 18, "decimalsResolved": true}
+"0x21f8eb7200fDDffec29ED12786E53FDaFa21eD22"	{"name": "Perppad E2E2", "symbol": "PPR2", "decimals": 18, "decimalsResolved": true}
+"0x1E8386e7B19f60dDB331064E780d3D8E0bd501Ad"	{"name": "Perppad E2E2", "symbol": "PPR2", "decimals": 18, "decimalsResolved": true}
+"0x3ea223C4e01358185dc3B7663506eC73a07BD2Bd"	{"name": "CASHCAT", "symbol": "CASHCAT", "decimals": 18, "decimalsResolved": true}
+"0x8348e8e9B07B8eF5a27278fAd36E6b5De5c77206"	{"name": "Vlad Tenev", "symbol": "VLAD", "decimals": 18, "decimalsResolved": true}
+"0x1AF2dd4B3af1E9Ba410A3533C90800337d725aaE"	{"name": "Robin", "symbol": "Robin", "decimals": 18, "decimalsResolved": true}
+"0xCB271914116359a735439105A65b4157a6eec58F"	{"name": "Dog in Hood", "symbol": "DIH", "decimals": 18, "decimalsResolved": true}
+"0x822644dfCD6A22969221B7e98e758714A7D0d7c1"	{"name": "Cat in Hood", "symbol": "CIH", "decimals": 18, "decimalsResolved": true}
+"0x8ea4ffC7adD9B747eC5d8A9D106fb836e90Db575"	{"name": "GameStop", "symbol": "GME", "decimals": 18, "decimalsResolved": true}
+"0x7DF2A1a8daC54ADD39bFF3904833a057Ad6837Ae"	{"name": "test", "symbol": "TEST", "decimals": 18, "decimalsResolved": true}
+"0x1165C79965a2b82332C0eAe402054C69E283F667"	{"name": "t4", "symbol": "T4", "decimals": 18, "decimalsResolved": true}
+"0x4895F51D208ae76aC638D26cb84f9589d1B0a73b"	{"name": "t9", "symbol": "T9", "decimals": 18, "decimalsResolved": true}
+"0xCdAF9Fd7cA088469A9b8e27B916aF3292c0a05B1"	{"name": "t10", "symbol": "T10", "decimals": 18, "decimalsResolved": true}
+"0xd18c3A56A9cc0C223F80d691363c0e4A5A1f8682"	{"name": "t12", "symbol": "T12", "decimals": 18, "decimalsResolved": true}
+"0x1fCA9f9BF73882d90E67818435A4B341CcE8882f"	{"name": "imagetest", "symbol": "ITEST", "decimals": 18, "decimalsResolved": true}
+"0x7B0224Da579f20E3a6126516203e530E85bBEA06"	{"name": "li", "symbol": "LI", "decimals": 18, "decimalsResolved": true}
+"0xFff46c142Ae99df36704e4Ed07084810AD3b90aE"	{"name": "img44", "symbol": "IMG5", "decimals": 18, "decimalsResolved": true}
+"0xb9d15055b7a3fb78fa687603a4CcEbb3a8e49c15"	{"name": "Frog Wif Hood", "symbol": "FWF", "decimals": 18, "decimalsResolved": true}
+"0x3fb08D4fede6A9150A0340686Eacc4cD2799eb5A"	{"name": "99", "symbol": "99", "decimals": 18, "decimalsResolved": true}
+"0xd56B3370bfd5864Fb9c02Ae4B8DA6aC88E42df49"	{"name": "TEST", "symbol": "TEST", "decimals": 18, "decimalsResolved": true}
+"0x2FEF5273513ABCA0ED18fDd14B631E15B3dBef5A"	{"name": "0xdEaD", "symbol": "DEAD", "decimals": 18, "decimalsResolved": true}
+"0xc6911796042b15d7Fa4F6CDe69e245DdCd3d9c31"	{"name": "Virtuals Protocol", "symbol": "VIRTUAL", "decimals": 18, "decimalsResolved": true}
+"0xbf72347bacEfE747Eaf48b8A66E38BABad3020A0"	{"name": "STONKS", "symbol": "STONKS", "decimals": 18, "decimalsResolved": true}
+"0xc68972C79dEd4BCb79874e6D03DFE3633cDc4881"	{"name": "Bitcoin on Robinhood", "symbol": "$BTCRH", "decimals": 18, "decimalsResolved": true}
+"0xD160a0F23F1625e6FF5defda5ef6eE727F5122f5"	{"name": "Robinhood Name Service", "symbol": "RNS", "decimals": 18, "decimalsResolved": true}
+"0x080bA8C5Dcc68087e227e51C6e309629f7519317"	{"name": "Robin", "symbol": "Robin", "decimals": 18, "decimalsResolved": true}
+"0xF8c0E9B26971C5Df9b754E5E0F5AD78C35770000"	{"name": "Democratize finance for all", "symbol": "Democratize", "decimals": 18, "decimalsResolved": true}
+"0xd19E3ebD325332ff63B480a291b34fe36Ad2F035"	{"name": "RobinFun", "symbol": "ROBINFUN", "decimals": 18, "decimalsResolved": true}
+"0xad4356AB0B61F9C5d6df546B776ABEF86eaA784a"	{"name": "RHOS", "symbol": "RHOS", "decimals": 18, "decimalsResolved": true}
+"0x4b3A3FF4Ec9D289727e24A8152F406Bada44264D"	{"name": "Frog In Hood", "symbol": "FIH", "decimals": 18, "decimalsResolved": true}
+"0x1e0AAaf3FdB5C0de3574d215e7081177Ec0F96a3"	{"name": "AI PIN", "symbol": "AI", "decimals": 18, "decimalsResolved": true}
+"0x5036a37DD3Ac7D18C7B4Bf2b0a033Df102AD2f55"	{"name": "HoodXBT", "symbol": "HOODXBT", "decimals": 18, "decimalsResolved": true}
+"0xde770c84FE66E063336b31737cFE9790f18c4087"	{"name": "Spark Savings USDG", "symbol": "spUSDG", "decimals": 6, "decimalsResolved": true}
+"0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC"	{"name": "NVIDIA • Robinhood Token", "symbol": "NVDA", "decimals": 18, "decimalsResolved": true}
+"0x86923f96303D656E4aa86D9d42D1e57ad2023fdC"	{"name": "AMD • Robinhood Token", "symbol": "AMD", "decimals": 18, "decimalsResolved": true}
+"0xfF080c8ce2E5feadaCa0Da81314Ae59D232d4afD"	{"name": "Micron Technology • Robinhood Token", "symbol": "MU", "decimals": 18, "decimalsResolved": true}
+"0xB90A19fF0Af67f7779afF50A882A9CfF42446400"	{"name": "Sandisk Corporation • Robinhood Token", "symbol": "SNDK", "decimals": 18, "decimalsResolved": true}
+"0x6330D8C3178a418788dF01a47479c0ce7CCF450b"	{"name": "Coinbase • Robinhood Token", "symbol": "COIN", "decimals": 18, "decimalsResolved": true}
+"0xc0D6457C16Cc70d6790Dd43521C899C87ce02f35"	{"name": "Meta Platforms • Robinhood Token", "symbol": "META", "decimals": 18, "decimalsResolved": true}
+"0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9"	{"name": "Apple • Robinhood Token", "symbol": "AAPL", "decimals": 18, "decimalsResolved": true}
+"0xe93237C50D904957Cf27E7B1133b510C669c2e74"	{"name": "Microsoft • Robinhood Token", "symbol": "MSFT", "decimals": 18, "decimalsResolved": true}
+"0x894E1EC2D74FFE5AEF8Dc8A9e84686acCB964F2A"	{"name": "Palantir Technologies • Robinhood Token", "symbol": "PLTR", "decimals": 18, "decimalsResolved": true}
+"0xdF0992E440dD0be65BD8439b609d6D4366bf1CB5"	{"name": "Circle Internet Group • Robinhood Token", "symbol": "CRCL", "decimals": 18, "decimalsResolved": true}
+"0xc72b96e0E48ecd4DC75E1e45396e26300BC39681"	{"name": "Intel • Robinhood Token", "symbol": "INTC", "decimals": 18, "decimalsResolved": true}
+"0xad25Ac6C84D497db898fa1E8387bf6Af3532a1c4"	{"name": "Alibaba • Robinhood Token", "symbol": "BABA", "decimals": 18, "decimalsResolved": true}
+"0xb0992820E760d836549ba69BC7598b4af75dEE03"	{"name": "Oracle • Robinhood Token", "symbol": "ORCL", "decimals": 18, "decimalsResolved": true}
+"0xBeEff033F34C046626B8D0A041844C5d1A5409dd"	{"name": "Steakhouse USDG", "symbol": "steakUSDG", "decimals": 18, "decimalsResolved": true}
+"0x7f0aBeF0C07280F82c6a08ead09dEd6BAE2C13Fc"	{"name": "iShares MSCI South Korea fund • Robinhood Token", "symbol": "EWY", "decimals": 18, "decimalsResolved": true}
+"0xF4C450c1570C2DBda91DE1Ed2E39995a15028c97"	{"name": "Diamond Hands", "symbol": "HODL", "decimals": 18, "decimalsResolved": true}
+"0x08BDf168557a9Cff9688D2aF9CE5aE9e689b913B"	{"name": "t11", "symbol": "T11", "decimals": 18, "decimalsResolved": true}
+"0xF2845f64F0F3E67B1fEE00852C0c49E9E6AAd90f"	{"name": "Robinhood", "symbol": "ETH", "decimals": 18, "decimalsResolved": true}
+"0x74F1A2b5A9E9Ba071533a955a2e5e325922f84C2"	{"name": "Robinhoodninja", "symbol": "ETH", "decimals": 18, "decimalsResolved": true}
+"0x6DC70115373d6feA0Fa6F583175cB4714768cE71"	{"name": "DS", "symbol": "DS", "decimals": 18, "decimalsResolved": true}
+"0xd5532A38e9F4aEB718B5C9ee86D0ED09cEEd1059"	{"name": "DSS", "symbol": "DSS", "decimals": 18, "decimalsResolved": true}
+"0xd8174D80ee420c52dD91fecFD674A95499fC0B3C"	{"name": "0xdEaD", "symbol": "DEAD", "decimals": 18, "decimalsResolved": true}
+"0x5b5a427baa5B2C208485Eabd4fB47c574F331B7B"	{"name": "0xdEaD", "symbol": "DEAD", "decimals": 18, "decimalsResolved": true}
+"0x8E46195522d9f9817bf76644755227A8A9c59942"	{"name": "TTTT", "symbol": "TTTT", "decimals": 18, "decimalsResolved": true}
+"0xe736E55BAf18f3Af993cCe3910DBebF3Fc4749c5"	{"name": "TTTT", "symbol": "TTTT", "decimals": 18, "decimalsResolved": true}
+"0x4f45bb853240798ecB7192B9dD1082604e21A376"	{"name": "TTTT", "symbol": "TTTT", "decimals": 18, "decimalsResolved": true}
+"0xB9FF6B590DfE8CFD467704E0bcF259cD957c598c"	{"name": "TTTT", "symbol": "TTTT", "decimals": 18, "decimalsResolved": true}
+"0xd777e8D71546CAF1D72eAe7C0A81A7aC5bE86c5A"	{"name": "TTTT", "symbol": "TTTT", "decimals": 18, "decimalsResolved": true}
+"0x93A732913Bb8b5fC18C53fAb9e7d548598bab117"	{"name": "TTTT", "symbol": "TTTT", "decimals": 18, "decimalsResolved": true}
+"0x8ac4A016aa17a117da1FE148fAEc2ea8ED1e1d5c"	{"name": "TTTT", "symbol": "TTTT", "decimals": 18, "decimalsResolved": true}
+"0x7EAB09B35F4E8d986FCC62cb02411ace4F42314f"	{"name": "TTTT", "symbol": "TTTT", "decimals": 18, "decimalsResolved": true}
+"0x7a58dED6463EC553330e468d504442993eE684c0"	{"name": "TTTT", "symbol": "TTTT", "decimals": 18, "decimalsResolved": true}
+"0xC050e597B5659e98B8aA4638a1Fd09aD977F7ae1"	{"name": "TTTT", "symbol": "TTTT", "decimals": 18, "decimalsResolved": true}
+"0x822aD601D885b979fCb1a4e34516167769b6d1A0"	{"name": "TTTT", "symbol": "TTTT", "decimals": 18, "decimalsResolved": true}
+"0x53100d6764fE59E0aEE50824efA8E2e53f6c8f3e"	{"name": "TTTT", "symbol": "TTTT", "decimals": 18, "decimalsResolved": true}
+"0x9Efe56BfC4511120F7A7B2b7ED4880Af7B311169"	{"name": "TTTT", "symbol": "TTTT", "decimals": 18, "decimalsResolved": true}
+"0x6b81210CEFf6F741fF6beA76D8F0f4a02B1e7D0d"	{"name": "TTTT", "symbol": "TTTT", "decimals": 18, "decimalsResolved": true}
+"0xb6a69A27ff67Dea5f0883d15588f3B6eFb1275Bd"	{"name": "vvRob", "symbol": "ROB", "decimals": 18, "decimalsResolved": true}
+"0x372E71B49834Da42D6fD2F3ef0FDecc5CE187C2c"	{"name": "TTTT", "symbol": "TTTT", "decimals": 18, "decimalsResolved": true}
+"0x749B592A0950eDcAF786b4406eE17B999fed0DC4"	{"name": "TTTT", "symbol": "TTTT", "decimals": 18, "decimalsResolved": true}
+"0x29f201b09Ee5fdA12651ff44e31A919a81F5C629"	{"name": "i", "symbol": "i", "decimals": 18, "decimalsResolved": true}
+"0x431619E8b35C59CAdfbB1606A1b63e813ac634A5"	{"name": "Perppad Coin", "symbol": "PPQRO7", "decimals": 18, "decimalsResolved": true}
+"0x0F108F329e12A3A0BCB2d21C9b126a7b3E44F933"	{"name": "Robinhook", "symbol": "HOOK", "decimals": 18, "decimalsResolved": true}
+"0x0648E90C2132c328Fdc1cAA6F19c8805f3947096"	{"name": "1", "symbol": "1", "decimals": 18, "decimalsResolved": true}
+"0xeC311CA0f2D17350a8367930a3426714D8064040"	{"name": "ThornHill", "symbol": "THORN", "decimals": 18, "decimalsResolved": true}
+"0x4B20314F1034cBc0f8950aa1AF84592Bb2D5C040"	{"name": "ThornHill", "symbol": "THORN", "decimals": 18, "decimalsResolved": true}
+"0xbD9cEC50CC7778b8f485E307B57C69023f228040"	{"name": "ThornHill", "symbol": "THORN", "decimals": 18, "decimalsResolved": true}
+"0x640Ad766A47de16e4d23008d6301944Df98b6a6A"	{"name": "RobinHook", "symbol": "HOOK", "decimals": 18, "decimalsResolved": true}
+"0xC300c5af45F562A27A8d7177bDa464B28e7579d0"	{"name": "UniHood", "symbol": "UHood", "decimals": 18, "decimalsResolved": true}
+"0x710559f57A707e2Fbd66CBce7c9c93916DCAe9ca"	{"name": "Quiver Launchpad", "symbol": "QUIVER", "decimals": 18, "decimalsResolved": true}
+"0x854B44B030888E0Aa42Ea91A3645b7788aD2f892"	{"name": "Quiver Launchpad", "symbol": "QUIVER", "decimals": 18, "decimalsResolved": true}
+"0x1AF6446f07eb1d97c546AFC8c9544cBDF3AD5137"	{"name": "AST SpaceMobile • Robinhood Token", "symbol": "ASTS", "decimals": 18, "decimalsResolved": true}
+"0x36046893810a7E7fCE501229d57dc3FC8c8716d0"	{"name": "Applied Materials • Robinhood Token", "symbol": "AMAT", "decimals": 18, "decimalsResolved": true}
+"0x282e87451E10fA6679BC7D76C69BE44cD3fC777C"	{"name": "Fluence Energy • Robinhood Token", "symbol": "FLNC", "decimals": 18, "decimalsResolved": true}
+"0x4e62068525Ab11FE768e29dfD00ef909B9803016"	{"name": "Lululemon • Robinhood Token", "symbol": "LULU", "decimals": 18, "decimalsResolved": true}
+"0x0f17206447090e464C277571124dD2688E48AEA9"	{"name": "Qualcomm • Robinhood Token", "symbol": "QCOM", "decimals": 18, "decimalsResolved": true}
+"0x59818904ab4cE163b3cE4FfB64f2D6Ca02c434B4"	{"name": "Quantum Computing • Robinhood Token", "symbol": "QUBT", "decimals": 18, "decimalsResolved": true}
+"0x3b14C39E89D60D627b42a1A4CA45b5bb45Fc12e2"	{"name": "Rocket Lab Corporation • Robinhood Token", "symbol": "RKLB", "decimals": 18, "decimalsResolved": true}
+"0x58FfE4a942d3885bAa22D7520691F611EF09e7AA"	{"name": "Taiwan Semiconductor Manufacturing • Robinhood Token", "symbol": "TSM", "decimals": 18, "decimalsResolved": true}
+"0x521Cf887E6531c6F667b5BC4D896E5d9bfE8EB2E"	{"name": "Applied Optoelectronics • Robinhood Token", "symbol": "AAOI", "decimals": 18, "decimalsResolved": true}
+"0x156E175DD063a8cE274C50654eF40e0032b3fbcF"	{"name": "Broadcom • Robinhood Token", "symbol": "AVGO", "decimals": 18, "decimalsResolved": true}
+"0x4D21483a44Bf67a86b77E3dA301411880797D452"	{"name": "Boeing • Robinhood Token", "symbol": "BA", "decimals": 18, "decimalsResolved": true}
+"0x4EA005168D7F09a7A0Ba9D1DEf21a479950E44C2"	{"name": "Costco • Robinhood Token", "symbol": "COST", "decimals": 18, "decimalsResolved": true}
+"0x1b0E319c6A659F002271B69dB8A7df2F911c153E"	{"name": "GameStop • Robinhood Token", "symbol": "GME", "decimals": 18, "decimalsResolved": true}
+"0x56d23beE5f41A7120170b0c603Dae30128e460e9"	{"name": "Intuit • Robinhood Token", "symbol": "INTU", "decimals": 18, "decimalsResolved": true}
+"0x558378E000D634A36593E338eBacdd6207640EfE"	{"name": "IonQ • Robinhood Token", "symbol": "IONQ", "decimals": 18, "decimalsResolved": true}
+"0x0C3260aF4B8f13a69c4c2dFb84fD667890CDFa14"	{"name": "ServiceNow • Robinhood Token", "symbol": "NOW", "decimals": 18, "decimalsResolved": true}
+"0x408c14038a04f7bD235329E26d2bf569ee20e250"	{"name": "Nu • Robinhood Token", "symbol": "NU", "decimals": 18, "decimalsResolved": true}
+"0x05b37Fb53A299a1b874A619e1c4C404D52C36F4C"	{"name": "Reddit • Robinhood Token", "symbol": "RDDT", "decimals": 18, "decimalsResolved": true}
+"0x284358abc07F9359f19f4b5b4aC91901Be2597Ba"	{"name": "Rigetti Computing • Robinhood Token", "symbol": "RGTI", "decimals": 18, "decimalsResolved": true}
+"0x0856F71C65268DA154DA4413d961cb348Dc6119d"	{"name": "ROBIN THE HOODINI", "symbol": "HOODINI", "decimals": 18, "decimalsResolved": true}
+"0x50A86F8b8cb888220f3b2F9264E01A935dC2824A"	{"name": "Perppad NoHook", "symbol": "PPNH", "decimals": 18, "decimalsResolved": true}
+"0x70F711C4C06E4Ad9145B081Fb2eb59ef93419a42"	{"name": "Perppad Coin", "symbol": "PPQRO7", "decimals": 18, "decimalsResolved": true}
+"0x8f3a20b6069a85d2233c91332039D83F937320d7"	{"name": "Liliswap", "symbol": "Lili", "decimals": 18, "decimalsResolved": true}
+"0x8457e7136C22d98099F5ba2a8Ce00568841C8044"	{"name": "Robinhook", "symbol": "RHOOK", "decimals": 18, "decimalsResolved": true}
+"0xc56fD6607b91888D3D50C3fd301DAFF938562057"	{"name": "Perppad Coin", "symbol": "PPZQ8I", "decimals": 18, "decimalsResolved": true}
+"0xd3d35b63C2faC2B1A71EBb6DDd183fAC9351ab59"	{"name": "Perppad Coin", "symbol": "PPGA0Y", "decimals": 18, "decimalsResolved": true}
+"0xf44702b17d9abD53815F703e772F35E9c71A53af"	{"name": "RAXOL", "symbol": "RAXOL", "decimals": 18, "decimalsResolved": true}
+"0x262b8DbF7D4b4d98a97AE3E6cCA337f5f43925Ce"	{"name": "VT", "symbol": "VT", "decimals": 18, "decimalsResolved": true}
+"0xeA8882E4726d79BE2621cA0a82dd50ea8489CFc7"	{"name": "Tesla Bork", "symbol": "TBORK", "decimals": 18, "decimalsResolved": true}
+"0x92FD66527192E3e61d4DDd13322Aa222DE86F9B5"	{"name": "iShares 0-3 Month Treasury Bond • Robinhood Token", "symbol": "SGOV", "decimals": 18, "decimalsResolved": true}
+"0x822CC93fFD030293E9842c30BBD678F530701867"	{"name": "Bloom Energy • Robinhood Token", "symbol": "BE", "decimals": 18, "decimalsResolved": true}
+"0xd917B029C761D264c6A312BBbcDA868658eF86a6"	{"name": "USA Rare Earth • Robinhood Token", "symbol": "USAR", "decimals": 18, "decimalsResolved": true}
+"0xa30FA36Db767ad9eD3f7a60fC79526fB4d56D344"	{"name": "United States Oil Fund • Robinhood Token", "symbol": "USO", "decimals": 18, "decimalsResolved": true}
+"0xF0AB0c93bE6F41369d302e55db1A96b3c430212D"	{"name": "IREN Limited • Robinhood Token", "symbol": "IREN", "decimals": 18, "decimalsResolved": true}
+"0x98E75885157C80992A8D41b696D8c9C6Fb30A926"	{"name": "SoFi Technologies • Robinhood Token", "symbol": "SOFI", "decimals": 18, "decimalsResolved": true}
+"0x7c04E6A3368F2A1DE3874f0e80d2e0A1a9915da6"	{"name": "Corning • Robinhood Token", "symbol": "GLW", "decimals": 18, "decimalsResolved": true}
+"0xec262a75e413fAfD0dF80480274532C79D42da09"	{"name": "Strategy Inc. • Robinhood Token", "symbol": "MSTR", "decimals": 18, "decimalsResolved": true}
+"0xE0444EF8BF4eD74f74FD73686e2ddF4C1c5591E8"	{"name": "Netflix • Robinhood Token", "symbol": "NFLX", "decimals": 18, "decimalsResolved": true}
+"0xF0C4BF4C582cb3836e98394b1d4e7B7281101bE8"	{"name": "Roblox • Robinhood Token", "symbol": "RBLX", "decimals": 18, "decimalsResolved": true}
+"0x92Ef19E82bD8fF36661DE838D5eaE7e5CEF0EfFE"	{"name": "Redwire • Robinhood Token", "symbol": "RDW", "decimals": 18, "decimalsResolved": true}
+"0xb8DBf92F9741c9ac1c32115E78581f23509916FD"	{"name": "Applied Digital • Robinhood Token", "symbol": "APLD", "decimals": 18, "decimalsResolved": true}
+"0x9651342CeA770aE9a2969Ba2A52611523146aef9"	{"name": "Carnival Corporation • Robinhood Token", "symbol": "CCL", "decimals": 18, "decimalsResolved": true}
+"0x941AE714EC6D8130c7B75d67160Ca08f1e7d11Dd"	{"name": "Dell • Robinhood Token", "symbol": "DELL", "decimals": 18, "decimalsResolved": true}
+"0xeB30663bDFf0622Ef4e4E5cBb4E975F19f33f51D"	{"name": "Futu Holdings • Robinhood Token", "symbol": "FUTU", "decimals": 18, "decimalsResolved": true}
+"0x8eF20885F94e3D9bc7eB3080279188Bd5ED7c08C"	{"name": "Lumentum • Robinhood Token", "symbol": "LITE", "decimals": 18, "decimalsResolved": true}
+"0xa5D4968421bA94814Be3B136b15cf422101aC1a3"	{"name": "Intuitive Machines • Robinhood Token", "symbol": "LUNR", "decimals": 18, "decimalsResolved": true}
+"0x62fd0668e10D8B72339BE2DCF7643001688ff13B"	{"name": "Marvell Technology • Robinhood Token", "symbol": "MRVL", "decimals": 18, "decimalsResolved": true}
+"0x9D9c6684F596F66a64C030B93A886D51Fd4D7931"	{"name": "Nebius Group • Robinhood Token", "symbol": "NBIS", "decimals": 18, "decimalsResolved": true}
+"0xbE6702d7b70315376dC48a3293f24f0982F86386"	{"name": "Navitas Semiconductor • Robinhood Token", "symbol": "NVTS", "decimals": 18, "decimalsResolved": true}
+"0xcf6B2D875361be807EAfa57458c80f28521F9333"	{"name": "POET Technologies • Robinhood Token", "symbol": "POET", "decimals": 18, "decimalsResolved": true}
+"0xB1BF26c1D20ff267A4f93550d1E0d06ac40a114B"	{"name": "Rivian Automotive • Robinhood Token", "symbol": "RIVN", "decimals": 18, "decimalsResolved": true}
+"0xc01aA1fECeC0605b13bc84874ff7256C0f5F562a"	{"name": "Super Micro Computer • Robinhood Token", "symbol": "SMCI", "decimals": 18, "decimalsResolved": true}
+"0x75742c18BC1f1C5c5f448f4C9D9C6F66dafAAa38"	{"name": "iShares Semiconductor ETF • Robinhood Token", "symbol": "SOXX", "decimals": 18, "decimalsResolved": true}
+"0xAd622320e520de39e72d41EF07438C3Fd3354875"	{"name": "Invesco S&P 500 Momentum ETF • Robinhood Token", "symbol": "SPMO", "decimals": 18, "decimalsResolved": true}
+"0x7dc013eB55e436f30d7ED1AFE4E36d6e45e3c3f7"	{"name": "Zscaler • Robinhood Token", "symbol": "ZS", "decimals": 18, "decimalsResolved": true}
+"0xbeEfFF136E3684273e6aA75A1669B784B373A4FD"	{"name": "Steakhouse Turbo USDG", "symbol": "bbqUSDGturbo", "decimals": 18, "decimalsResolved": true}
+"0x029c3E866C56Fef850F0f5E5b70A76d387E4E618"	{"name": "t93", "symbol": "T93", "decimals": 18, "decimalsResolved": true}
+"0x40Fa3eE2f5A85395881474C94E02e088f89f30f6"	{"name": "MEOW", "symbol": "MEOW", "decimals": 18, "decimalsResolved": true}
+"0x47F93d52cBeC7C6D2CfC080e154002370a60dAEA"	{"name": "ASML Holding NV • Robinhood Token", "symbol": "ASML", "decimals": 18, "decimalsResolved": true}
+"0x44c4F142009036cF477eD2d09932051843137CF1"	{"name": "Zoom • Robinhood Token", "symbol": "ZM", "decimals": 18, "decimalsResolved": true}
+"0x5e81213613b6B86EaB4c6c50d718d34359459786"	{"name": "Take-Two Interactive Software • Robinhood Token", "symbol": "TTWO", "decimals": 18, "decimalsResolved": true}
+"0x1Cdad396DB64BDa184d5182A97Dd9B3C62100b7D"	{"name": "Everpure • Robinhood Token", "symbol": "P", "decimals": 18, "decimalsResolved": true}
+"0x27c99fBde9D0d2AA4f4Bfb4943f237843DdF6958"	{"name": "Datadog • Robinhood Token", "symbol": "DDOG", "decimals": 18, "decimalsResolved": true}
+"0x39EC44Bee4F6A116c6F9B8De566848a985C53C60"	{"name": "e.l.f. Beauty • Robinhood Token", "symbol": "ELF", "decimals": 18, "decimalsResolved": true}
+"0x4189F0c66EBBB0bfeF1C31f763131361EF32f77C"	{"name": "Permian Resources • Robinhood Token", "symbol": "PR", "decimals": 18, "decimalsResolved": true}
+"0x5c90450Bbb4273D7b2f17CF6917AEB237A569679"	{"name": "Cerebras Systems • Robinhood Token", "symbol": "CBRS", "decimals": 18, "decimalsResolved": true}
+"0x48961813349333209994750ffA89b3c5C22eC969"	{"name": "MaxLinear • Robinhood Token", "symbol": "MXL", "decimals": 18, "decimalsResolved": true}
+"0x15Cd20759CE7F3285c29A319dE2D1A2e098c6f43"	{"name": "State Street Technology Select Sector SPDR ETF • Robinhood Token", "symbol": "XLK", "decimals": 18, "decimalsResolved": true}
+"0x0E6e67Ba88e7b5d9B67636A215c76779B948dE79"	{"name": "United Microelectronics • Robinhood Token", "symbol": "UMC", "decimals": 18, "decimalsResolved": true}
+"0x25C288E6D899b9BC30160965aD9644c67e73bE0C"	{"name": "Ford Motor • Robinhood Token", "symbol": "F", "decimals": 18, "decimalsResolved": true}
+"0xE392a881491771430082391EFc58db55709Dd7a5"	{"name": "Hoodrat", "symbol": "HOODRAT", "decimals": 18, "decimalsResolved": true}
+"0x7b62695547b463Ac2bc00B31fbdC90dFc22acD8d"	{"name": "Little John", "symbol": "JOHN", "decimals": 9, "decimalsResolved": true}
+"0x88a85F40CFD45A5aD92F37738D3524Fe725A4026"	{"name": "MerryMen", "symbol": "MM", "decimals": 18, "decimalsResolved": true}
+"0x12692aCe081fc0D94F66F7df85502f7e342bc951"	{"name": "kmzd", "symbol": "kmzd", "decimals": 18, "decimalsResolved": true}
+"0x621aCd7161e9207681bc66E2439A2663648D7d95"	{"name": "openzz", "symbol": "openzz", "decimals": 18, "decimalsResolved": true}
+"0xd4052415613B34Af236024B895574c467f65b6dD"	{"name": "4663", "symbol": "4663", "decimals": 18, "decimalsResolved": true}
+"0xC59dB32592A7F7cc4D2A108F562E23e03911095b"	{"name": "Little John", "symbol": "JOHN", "decimals": 18, "decimalsResolved": true}
+"0xF197e42db5E7178fd8A58eA21a6A5A48B09173Eb"	{"name": "Ahoy", "symbol": "AHOY", "decimals": 18, "decimalsResolved": true}
+"0xefd3db0271Aa579B8F9F1E4AB91a9D17FEa1fAa9"	{"name": "Rialto", "symbol": "RIALTO", "decimals": 18, "decimalsResolved": true}
+"0x6EE0dE87554Cb70c8519213dC053b25aC523AF40"	{"name": "Robbing Hood", "symbol": "ROB", "decimals": 18, "decimalsResolved": true}
+"0xC9b64599856697e0fEEf9341d41585008b84ca2c"	{"name": "Real World Asses", "symbol": "RWA", "decimals": 18, "decimalsResolved": true}
+"0x06135f13Fd1Be17485c45Bdb384BE42836786002"	{"name": "Hoodstreet", "symbol": "HOST", "decimals": 18, "decimalsResolved": true}
+"0xD36C6041f5A9394D5A75039b6653cED52C88b851"	{"name": "Robinhood Dog", "symbol": "BRODIE", "decimals": 9, "decimalsResolved": true}
+"0x82DA4646242e1D962e96e932269Dc644c94a9CaA"	{"name": "Workday • Robinhood Token", "symbol": "WDAY", "decimals": 18, "decimalsResolved": true}
+"0xf23250dac154D05Bb671CB0d0eBEf3c635c79CE2"	{"name": "UPS • Robinhood Token", "symbol": "UPS", "decimals": 18, "decimalsResolved": true}
+"0x89776d4Cd68193597A2fC132cfaC1fDe36CCeA8a"	{"name": "Tower Semiconductor • Robinhood Token", "symbol": "TSEM", "decimals": 18, "decimalsResolved": true}
+"0xDdf2266b79abf0B48898959B0ed6E6adf512be74"	{"name": "MongoDB • Robinhood Token", "symbol": "MDB", "decimals": 18, "decimalsResolved": true}
+"0x8005d266423c7ea827372c9c864491e5786600ea"	{"name": "Eli Lilly • Robinhood Token", "symbol": "LLY", "decimals": 18, "decimalsResolved": true}
+"0xf1953DAB6FaD537488d5A022361FfAa8B4c95eC6"	{"name": "Innodata • Robinhood Token", "symbol": "INOD", "decimals": 18, "decimalsResolved": true}
+"0xA8eB3BCcbf2017eE7CBfb652eB51CF2E1B153289"	{"name": "Xanadu Quantum • Robinhood Token", "symbol": "XNDU", "decimals": 18, "decimalsResolved": true}
+"0x9b23573b156B52565012F5cE02CDF60AFBaa70Be"	{"name": "Penguin Solutions • Robinhood Token", "symbol": "PENG", "decimals": 18, "decimalsResolved": true}
+"0xBEF75684C43c4ea7BD18Dd532a2244674Ee8b926"	{"name": "Nano Nuclear Energy • Robinhood Token", "symbol": "NNE", "decimals": 18, "decimalsResolved": true}
+"0xF53F66751B1Eff985311b693531E3290F600c410"	{"name": "Shopify • Robinhood Token", "symbol": "SHOP", "decimals": 18, "decimalsResolved": true}
+"0xf9B46d3D1B22199D4D1025a9cEDB540A33F1a2d5"	{"name": "ExxonMobil Holdings Corporation • Robinhood Token", "symbol": "XOM", "decimals": 18, "decimalsResolved": true}
+"0x8cF07C5A878945185d327aAa6e33FAa95F95e7bF"	{"name": "Celsius • Robinhood Token", "symbol": "CELH", "decimals": 18, "decimalsResolved": true}
+"0xcBB95BBF36099d34dA091dc6Fa6F49EfA257Cee3"	{"name": "CleanSpark • Robinhood Token", "symbol": "CLSK", "decimals": 18, "decimalsResolved": true}
+"0xC583c60aeF9Dc401Da72cEC1B404743a93cea1Cc"	{"name": "D-Wave Quantum Inc. Common Stock • Robinhood Token", "symbol": "QBTS", "decimals": 18, "decimalsResolved": true}
+"0xbd0126C62253DF71a6D94CEDBeD8b4ACceAddb0d"	{"name": "TTTT", "symbol": "TTTT", "decimals": 18, "decimalsResolved": true}
+"0x08A1444Ad2b7a44813E09D1235992390E9db226a"	{"name": "Omega", "symbol": "OMEGA", "decimals": 18, "decimalsResolved": true}
+"0x6e9477D6E85Af98E4FA836CcC9e88Fd4F2b37159"	{"name": "hh", "symbol": "hh", "decimals": 18, "decimalsResolved": true}
+"0x3806645bf93344d19d9FB645C718599330CED17A"	{"name": "TTTT", "symbol": "TTTT", "decimals": 18, "decimalsResolved": true}
+"0xBb6f36921B5198Bc2A4fbC179E94E75a6059502b"	{"name": "TTTT", "symbol": "TTTT", "decimals": 18, "decimalsResolved": true}
+"0x48E1013dFE60B7285D4eC1F7A5FE2F2dD0C3Ba35"	{"name": "Robinos", "symbol": "ROB", "decimals": 18, "decimalsResolved": true}
+"0xc7A86D0DbB00D49770e0bbbA57FAb764B9cA4a4d"	{"name": "WallStreetBets", "symbol": "WSB", "decimals": 18, "decimalsResolved": true}
+"0x9Db5b5d7CDb5Ac545Abe6f4e5b0B5E5F2Be31186"	{"name": "Robinos", "symbol": "ROB", "decimals": 18, "decimalsResolved": true}
+"0x4539015458735a7B3bce99C5F140096559f26830"	{"name": "BANKRONROBINHOOD", "symbol": "BANKR", "decimals": 18, "decimalsResolved": true}
+"0x8Cfc903E80b5409487Ed38598660487024F182Bb"	{"name": "BankrOnRobinhood", "symbol": "HOOD", "decimals": 18, "decimalsResolved": true}
+"0x39aC6202484243997DEc8E01359ab6959E4ba287"	{"name": "HoodXBT", "symbol": "HOODXBT", "decimals": 18, "decimalsResolved": true}
+"0xBBE708e20C3fAcc4e1E5Ee4Eb43AF9882624D9Dc"	{"name": "DegenHood", "symbol": "DEGEN", "decimals": 18, "decimalsResolved": true}
+"0xED93E322D5a30ae067Bc325D7d1473cFcef8eD9E"	{"name": "gRobinhood", "symbol": "GHOOD", "decimals": 18, "decimalsResolved": true}
+"0xF6b1bcB356bC1561c7b9BE76314b59626afA3649"	{"name": "Opera", "symbol": "OPERA", "decimals": 18, "decimalsResolved": true}
+"0x4FAE53e383704eaFF4046eD79D6B939288a355be"	{"name": "Forge", "symbol": "FORGE", "decimals": 18, "decimalsResolved": true}
+"0x2E7b5308957b65D88D841e8Ce95E2447a29e5173"	{"name": "OBE", "symbol": "OBE", "decimals": 18, "decimalsResolved": true}
+"0x246B3bfb20be1FAb85E9645Be1E2c3A379637b05"	{"name": "You", "symbol": "YOU", "decimals": 18, "decimalsResolved": true}
+"0xb65FC56e6B8DAcA6d2e7B1c9D00e0e0C71Ec2275"	{"name": "y", "symbol": "y", "decimals": 18, "decimalsResolved": true}
+"0x5A2844bbd4E9FFB36246A1f2f495fe08d6DaF16D"	{"name": "TTTT", "symbol": "TTTT", "decimals": 18, "decimalsResolved": true}
+"0xF8c090Cc39B9081d93145A30e0f3D3d0A5DEEc77"	{"name": "TTTT", "symbol": "TTTT", "decimals": 18, "decimalsResolved": true}
+"0xD45924329fb31219314f717d80300Ce8AEFB651b"	{"name": "Ff", "symbol": "FF", "decimals": 18, "decimalsResolved": true}
+"0x65A5bA08626871D04425c0239F960b6Fb970abE5"	{"name": "0", "symbol": "0", "decimals": 18, "decimalsResolved": true}
+"0xB7F6F1Aaef58666BB6cA9CD97D5cef154d6f8817"	{"name": "The Open Book", "symbol": "BOOK", "decimals": 18, "decimalsResolved": true}
+"0xAEA48E94D92FdB60E3078E48A396ff98181adcA4"	{"name": "Omnipotent", "symbol": "OMNI", "decimals": 18, "decimalsResolved": true}
+"0x8696921D852e02758b11eE3EED541Ed8708043e2"	{"name": "SEND IT", "symbol": "SENDIT", "decimals": 18, "decimalsResolved": true}
+"0x5553F5ab6caEFA54893CcBbf5A07444703c83C14"	{"name": "RobinHook", "symbol": "HOOK", "decimals": 18, "decimalsResolved": true}
+"0xA24f02A1e5C532fC190544b413130E4a32BfFe06"	{"name": "Quiver Launchpad", "symbol": "QUIVER", "decimals": 18, "decimalsResolved": true}
+"0xc05868D4D5226c443a4B260FdA2ee76404642A76"	{"name": "Quiver Launchpad", "symbol": "QUIVER", "decimals": 18, "decimalsResolved": true}
+"0xa1078c0192Af9b0Ae18190a54eB236087FcD47dB"	{"name": "Quiver Launchpad", "symbol": "QUIVER", "decimals": 18, "decimalsResolved": true}
+"0x31268C2BCD08ab6898f90212A8c159D9aD14aAe1"	{"name": "Quiver Launchpad", "symbol": "QUIVER", "decimals": 18, "decimalsResolved": true}
+"0x56f6dc947874BeeDCce5b1c039a5D7FBA45fd8c8"	{"name": "323", "symbol": "3232", "decimals": 18, "decimalsResolved": true}
+"0xccD41C6C61A77d875A5F9E0c5FfeE8EbFc4078B6"	{"name": "RobinHOOK", "symbol": "HOOK", "decimals": 18, "decimalsResolved": true}
+"0xDAe64A165f57281edF36942fD5D756008e212749"	{"name": "Quiver Launchpad", "symbol": "QUIVER", "decimals": 18, "decimalsResolved": true}
+"0x3e0882892b0077D52ED4588e1057ad27156c4311"	{"name": "Quiver Launchpad", "symbol": "QUIVER", "decimals": 18, "decimalsResolved": true}
+"0x1Fd9d08Fd25142AAe58FcA763670295F992Fd34E"	{"name": "Quiver Launchpad", "symbol": "QUIVER", "decimals": 18, "decimalsResolved": true}
+"0x586cc3c3168C95A72C199E77eFE0077b8b5096ca"	{"name": "Quiver Launchpad", "symbol": "QUIVER", "decimals": 18, "decimalsResolved": true}
+"0xEe1efA109474294Bf3931956b11d32F53Ef317Db"	{"name": "Quiver Launchpad", "symbol": "QUIVER", "decimals": 18, "decimalsResolved": true}
+"0xD953cceb452353a20183D6d5f15288C67dc8816f"	{"name": "ssds", "symbol": "ssds", "decimals": 18, "decimalsResolved": true}
+"0xB16AaE615E830FfF7baDC361104477A1ffcB087C"	{"name": "Quiver Launchpad", "symbol": "QUIVER", "decimals": 18, "decimalsResolved": true}
+"0xDE0d9D151d4F4B6E0a0bFbb8C5a35D2B105e0183"	{"name": "Quiver Launchpad", "symbol": "QUIVER", "decimals": 18, "decimalsResolved": true}
+"0xC7B40d2728136CcAD9Bf6DcFd3bA7878116Cfd0B"	{"name": "Quiverhood", "symbol": "QUIVERHOOD", "decimals": 18, "decimalsResolved": true}
+"0xAB5A6fBd52a93fC793A9B16b76A2B3da8C7Ed8e2"	{"name": "Quiverhood", "symbol": "QUIVERHOOD", "decimals": 18, "decimalsResolved": true}
+"0xE4c779cC4583b351Eb77c917597B4927966e1962"	{"name": "test2", "symbol": "test2", "decimals": 18, "decimalsResolved": true}
+"0x0eFc684A972CF47BD5a06831f4d1FD06FF052703"	{"name": "test2", "symbol": "test2", "decimals": 18, "decimalsResolved": true}
+"0xc845239bB171eFAa7A10FA9F00E2C273627D06D6"	{"name": "test2", "symbol": "test2", "decimals": 18, "decimalsResolved": true}
+"0xe6bd8677d39B185A75829fE15dfEEe42BcB16374"	{"name": "test2", "symbol": "test2", "decimals": 18, "decimalsResolved": true}
+"0x09be1Bb2afed12c27885c4a0bfC1a9DB1b7E5a92"	{"name": "Robinhood Peg", "symbol": "Rpeg", "decimals": 18, "decimalsResolved": true}
+"0x4aF22B1522Cdf2652324e43e06286d56F609dbE8"	{"name": "openaa", "symbol": "openaa", "decimals": 18, "decimalsResolved": true}
+"0x7aeA79cf6F046b1FB9958283Bb28A281198b2Be4"	{"name": "Peg", "symbol": "Rpegv4", "decimals": 18, "decimalsResolved": true}
+"0x6AA662C4CEd57735a9ec87e31549d5eA6E32eB5f"	{"name": "rpeg4", "symbol": "rpeg4", "decimals": 18, "decimalsResolved": true}
+"0x724cEff2E007400A10a4c795fe3ACA8aA983E99B"	{"name": "Robinhood Peg", "symbol": "RPEG", "decimals": 18, "decimalsResolved": true}
+"0xC0B229C671d870e6A44f75788819913b5FF1A360"	{"name": "RPEG", "symbol": "RPEG", "decimals": 18, "decimalsResolved": true}
+"0x7C205b2059a42ec84c890289CB2B80ad48a45228"	{"name": "gRobinhood", "symbol": "GHOOD", "decimals": 18, "decimalsResolved": true}
+"0xE1335efB662FCCB2991A08d99349b26ADc157bA3"	{"name": "test", "symbol": "TEST", "decimals": 18, "decimalsResolved": true}
+"0xc3529C2020671EB31f6F18C754a1C84bFcA12bA3"	{"name": "test2", "symbol": "TEST", "decimals": 18, "decimalsResolved": true}
+"0x62A173431FEB285faC4e7Dae06f208075B9D8A9B"	{"name": "Buffalo", "symbol": "WINGS", "decimals": 18, "decimalsResolved": true}
+"0x56910D4409F3a0C78C64DD8D0545FF0705389870"	{"name": "The Index", "symbol": "Index", "decimals": 18, "decimalsResolved": true}
+"0x97aA8dD7E7c1D883471F22aeeeb5E9c0c9082082"	{"name": "ROBINHOOD REWARDS", "symbol": "REWARDS", "decimals": 9, "decimalsResolved": true}
+"0xcAa4B1E4F2802E6c3183FF6B78cd5882f6931CF9"	{"name": "Put A Cat On It", "symbol": "CATONIT", "decimals": 18, "decimalsResolved": true}
+"0x8DD4D6BDB29B7Ab0BBd1b0537F7b8E88A989dd7D"	{"name": "Cashcow", "symbol": "CASHCOW", "decimals": 18, "decimalsResolved": true}
+"0xd5e76Db489d390B62aF6eb808AA7B4837a6Ab43c"	{"name": "Grand Theft Auto VI", "symbol": "GTAVI", "decimals": 18, "decimalsResolved": true}
+"0x6048bBEb3B1A751aC9DE4cD0709C13F8E2c646F0"	{"name": "smugolot.org", "symbol": "SMG", "decimals": 18, "decimalsResolved": true}
+"0x71E862d24136d34861645566cf8207e4fFaF1Cd6"	{"name": "CashCow", "symbol": "CashCOw", "decimals": 9, "decimalsResolved": true}
+"0x0CA0beA4EfcaAc7009FaA6E11b4475f4583540D9"	{"name": "FEATHER", "symbol": "FEATHER", "decimals": 9, "decimalsResolved": true}
+"0xFbD1Bf9d354CD8197Ab54f80778C03cc468ADAaf"	{"name": "Vena Protocol", "symbol": "VENA", "decimals": 18, "decimalsResolved": true}
+"0xA80Ba06F0a0327E68dA6BedE67eB35ac023D6e62"	{"name": "The Floor", "symbol": "FLOOR", "decimals": 18, "decimalsResolved": true}
+"0xF1F993Cf95c344DFd35EC18982c6a66790993Bcf"	{"name": "Aibo", "symbol": "AIBO", "decimals": 18, "decimalsResolved": true}
+"0x24040DD10D6759E4Cb32B694Ba914e93031de5A4"	{"name": "Robinhoodpeg", "symbol": "RPEG", "decimals": 18, "decimalsResolved": true}
+"0x1A8Ac07Df2a896282d2c4549b225330ac1c9c6d8"	{"name": "ttt", "symbol": "test", "decimals": 18, "decimalsResolved": true}
+"0x70e545B13E4c11A09c71e66de3361664ce43DFC2"	{"name": "Equite", "symbol": "EQT", "decimals": 18, "decimalsResolved": true}
+"0xC5dA8189eB6C33772D150db686F3D159E12b573E"	{"name": "testing", "symbol": "TST", "decimals": 18, "decimalsResolved": true}
+"0x1B808E45c76cA479e2F978DD47Cd37Bd83aA4a15"	{"name": "Meme", "symbol": "MEME", "decimals": 18, "decimalsResolved": true}
+"0x0c011DBd425948b6bFccd53198A73cC34781E0cC"	{"name": "Hood Lab", "symbol": "LAB", "decimals": 18, "decimalsResolved": true}
+"0xbc89676aaC0A9A49a072604Cc7d975328745e82F"	{"name": "MEME", "symbol": "MEME", "decimals": 18, "decimalsResolved": true}
+"0xa72a9cd1F389A03E21719194A4fB4C0Df90bb78C"	{"name": "ZNS RH Smoke", "symbol": "ZRHSMOKE", "decimals": 18, "decimalsResolved": true}
+"0x2Bb9F21233a9F0B9D5004894BD3a02D523b17c49"	{"name": "World Cup Wizards", "symbol": "GOALZ", "decimals": 18, "decimalsResolved": true}
+"0x1340E859fe1f2a629120E907f7dE1f1572695229"	{"name": "Lokipoki Legends", "symbol": "LOKI", "decimals": 18, "decimalsResolved": true}
+"0xa88966dDe79693A1d383aBE32748b8bCec8B1480"	{"name": "Glitch Rehearsal", "symbol": "GLTCHT", "decimals": 18, "decimalsResolved": true}
+"0xa89D49B53A41bd6ed52C40509C50c29E9AE6E022"	{"name": "BankrBot", "symbol": "BNKR", "decimals": 18, "decimalsResolved": true}
+"0x3fC8B9ee43A361bbBc7Ae160e84Fd645B6314766"	{"name": "Glitch 10k", "symbol": "GLK", "decimals": 18, "decimalsResolved": true}
+"0x58Ca994f62199eaC43Cb7E06416bcC88B4C31e92"	{"name": "BASED", "symbol": "vs", "decimals": 18, "decimalsResolved": true}
+"0xEAFD47702E2FF4d05721291D7bFEb4C0b304FC20"	{"name": "ROBOTOKEN", "symbol": "ROBO", "decimals": 18, "decimalsResolved": true}
+"0x45F0b7ab0103117f2025767F45a8868fD0F274c6"	{"name": "tst", "symbol": "tst", "decimals": 18, "decimalsResolved": true}
+"0xA660B41C7722edbEDCA51e5077492EAC0E469496"	{"name": "Robinjack", "symbol": "ROJAK", "decimals": 18, "decimalsResolved": true}
+"0xDdF2156f773c83A828C4966cDAf2f197219410c0"	{"name": "STONKS", "symbol": "STONKS", "decimals": 18, "decimalsResolved": true}
+"0xc22c2d192587bf611F5e28dF3510AC03D02f44aC"	{"name": "DUMB MONEY", "symbol": "DUMB", "decimals": 18, "decimalsResolved": true}
+"0x38155f04C2119FA5067dEB49eBafD813fF4B6DcE"	{"name": "TSLA FUND", "symbol": "FUND", "decimals": 18, "decimalsResolved": true}
+"0xa52Eb995A4298960244D6F68F3bBf3837A732C4D"	{"name": "Robinhood USD", "symbol": "RUSD", "decimals": 18, "decimalsResolved": true}
+"0xc07aDD5209339F1350f194e1Cb80E565079C8D14"	{"name": "White", "symbol": "WHITE", "decimals": 18, "decimalsResolved": true}
+"0xEd41B5E7911579e17c2114dC7C2691601BB39143"	{"name": "Mother of All Short Squeezes", "symbol": "MOASS", "decimals": 18, "decimalsResolved": true}
+"0x7e327706F4B82d92fFF3C041F5745394E642d090"	{"name": "Gate Test", "symbol": "GATE", "decimals": 18, "decimalsResolved": true}
+"0xB6E32aCe4bb3b17E05Ec2820991F2855c69147f7"	{"name": "Seam Test", "symbol": "SEAM", "decimals": 18, "decimalsResolved": true}
+"0xaBE71B6fF02AAa0335f5A747aAa5a836339601e2"	{"name": "Robinhood CEO", "symbol": "PUPA", "decimals": 18, "decimalsResolved": true}
+"0xa7aF6fd55c1059f2142491CA995609F97f28417c"	{"name": "Guillotine Gains", "symbol": "CHOP", "decimals": 18, "decimalsResolved": true}
+"0xE1959470315b56398Ee7c547B5a2ba7d69c7831D"	{"name": "Miasma Mint", "symbol": "MIASMA", "decimals": 18, "decimalsResolved": true}
+"0x4800Fb4c7444a8F43E918B50C9843b7E211E025b"	{"name": "Lazybbb", "symbol": "LAZYBBB", "decimals": 18, "decimalsResolved": true}
+"0x0f85063265596D454fCbEcAFB8fF358468972079"	{"name": "Solvio", "symbol": "SOLVIO", "decimals": 18, "decimalsResolved": true}
+"0xBC2FF9C6331FECA4013a64582373D8Df7956A1DB"	{"name": "HoodPad", "symbol": "HPAD", "decimals": 9, "decimalsResolved": true}
+"0xAB200a6066c9e4e0Fce25f2d51F5fFbC9d0af950"	{"name": "Feather", "symbol": "FEATHER", "decimals": 9, "decimalsResolved": true}
+"0x8Ff92566f2e81BDd68EDfAa8cde73942A723796b"	{"name": "ProjectVex", "symbol": "VEX", "decimals": 18, "decimalsResolved": true}
+"0xeE56B8206f38E356BD14E91122998C3298D561bf"	{"name": "frok", "symbol": "frok", "decimals": 18, "decimalsResolved": true}
+"0x8eD7b38031a4C4bD16Eaa29f58e1fA5A52eb1Fa1"	{"name": "Freedum", "symbol": "FREEDUM", "decimals": 18, "decimalsResolved": true}
+"0x8841c931C8DA6f4bFAcd2282B71a5393d947d5DE"	{"name": "Tator", "symbol": "TATOR", "decimals": 18, "decimalsResolved": true}
+"0x9ABd4c0e23BF27fe3815f892F7FFcd8C56833AF0"	{"name": "Catfish Hood", "symbol": "Catfish", "decimals": 18, "decimalsResolved": true}
+"0xA0Ad8E6435dd6631f26629890a93B6F3F343e893"	{"name": "PEMBA", "symbol": "PEMBA", "decimals": 18, "decimalsResolved": true}
+"0x4adb8f87Bbd0b121a9FBed1f88Ef4d48bdfE9Efc"	{"name": "Rehearsal", "symbol": "REH", "decimals": 18, "decimalsResolved": true}
+"0xfADF20Be291A2cA90b703f6a49FaCA241f609A49"	{"name": "kumamon", "symbol": "KUMA", "decimals": 18, "decimalsResolved": true}
+"0xea1AbCeAB9E7e12d3DDdC5eE121B38040df9d4e0"	{"name": "Aether Navigators", "symbol": "AETHN", "decimals": 18, "decimalsResolved": true}
+"0x0c9b166C8F3FFD6A7f5f16096dcbB6cf76214053"	{"name": "Toaster Uprising", "symbol": "CRUMBZ", "decimals": 18, "decimalsResolved": true}
+"0x4e8019D112Ee31198aF7aC73bD78A72A3fe7D265"	{"name": "Formica After Dark", "symbol": "FORMCA", "decimals": 18, "decimalsResolved": true}
+"0x7c004cB60AB68D49c56ce576155fab9215f20D38"	{"name": "Feral Frenzy", "symbol": "FRLFRZ", "decimals": 18, "decimalsResolved": true}
+"0x0E5DBF2A500c36855Bc6f9e2531aCA29523cF4c7"	{"name": "Peasant Power", "symbol": "PSTP", "decimals": 18, "decimalsResolved": true}
+"0x2D94a9111F5d751d2cd1E0987629C0e44FD2983a"	{"name": "Doctor's Ledger", "symbol": "DOCLE", "decimals": 18, "decimalsResolved": true}
+"0xDD1e50654fbbB0ec6838e6563790FD9DEadBC3ab"	{"name": "Shadownet Syndicate", "symbol": "SHDWNET", "decimals": 18, "decimalsResolved": true}
+"0x587673D722E6c7Ad79C8787040c3D7baef0D4cC3"	{"name": "Burnt Butter Rebellion", "symbol": "SIZZLEFA", "decimals": 18, "decimalsResolved": true}
+"0xD696A1b43f77780b451d2Df392C40907E3215A8F"	{"name": "Swamp Lurk", "symbol": "SLURK", "decimals": 18, "decimalsResolved": true}
+"0xc2F4f9E89A5F81F29685AbfDeF37611DC4fEceE8"	{"name": "ROAR KITTY", "symbol": "KITTY", "decimals": 18, "decimalsResolved": true}
+"0x6939f29fe680767662D6EAafDA013F09A72a33B4"	{"name": "TEST", "symbol": "TEST", "decimals": 18, "decimalsResolved": true}
+"0x201CA3A55e49f6365310d51c051b620695e0F453"	{"name": "Robinhood Test", "symbol": "ROBINHOOD", "decimals": 18, "decimalsResolved": true}
+"0x884D8336A3FB61854684CD1487914158b0fDD904"	{"name": "Hood Land", "symbol": "HLAND", "decimals": 9, "decimalsResolved": true}
+"0x8e62F281f282686fCa6dCB39288069a93fC23F1c"	{"name": "Hoodrat", "symbol": "HOODRAT", "decimals": 18, "decimalsResolved": true}
+"0x5b5daAB6e000B1D984b8E4eD5DB196aACF78Ccd0"	{"name": "Mr Bell", "symbol": "BELL", "decimals": 18, "decimalsResolved": true}
+"0xC32ac54Fa87462BdD89cf061CD2f5984f09d94D6"	{"name": "Bandit", "symbol": "BAND", "decimals": 18, "decimalsResolved": true}
+"0x61966e66972e4Ef17B25e16F9bde082E559B0dB9"	{"name": "FIDEL", "symbol": "FIDEL", "decimals": 18, "decimalsResolved": true}
+"0xD1A2fE37d7584601Af1b2Bd8D80A69D66c0B0403"	{"name": "Bog by Matt Furie", "symbol": "BOG", "decimals": 18, "decimalsResolved": true}
+"0xD8A520Dee00a0151223d9201359e33754E146694"	{"name": "Hood Strategy", "symbol": "HOODSTRGY", "decimals": 18, "decimalsResolved": true}
+"0xE49A1C3033EcC6b804bc423021D3F71F1A3e0F9B"	{"name": "RobinWifHat", "symbol": "WIF", "decimals": 18, "decimalsResolved": true}
+"0xD53feee9C73572107FB48C40A7A29232793b14c6"	{"name": "SPX4663", "symbol": "SPX4663", "decimals": 6, "decimalsResolved": true}
+"0xEd87BEBF0010B68A0a364D237e9076FB238aaD74"	{"name": "Loxley Genesis", "symbol": "GEN", "decimals": 18, "decimalsResolved": true}
+"0x9fDC7C84d6d7f4422901e54e03a11Fd3848F0472"	{"name": "Robin In Hood", "symbol": "RIH", "decimals": 18, "decimalsResolved": true}
+"0x0b9E3b450235Fa1224Bf193824147214ae7A590B"	{"name": "frok", "symbol": "frok", "decimals": 18, "decimalsResolved": true}
+"0x0686d56F6ada368Dc84Bc3A2d472Fc5fb1812ee6"	{"name": "Pepe", "symbol": "PEPE", "decimals": 18, "decimalsResolved": true}
+"0x23149057c03720d17119581D58951Bf3Dc51740d"	{"name": "Robinhood Dog", "symbol": "COOPER", "decimals": 9, "decimalsResolved": true}
+"0x44f3700880E5F0706b1c09b120F634dd7935842b"	{"name": "Wagent", "symbol": "WAGENT", "decimals": 18, "decimalsResolved": true}
+"0x56A98Db16Cf501b686c14BA00a5DeC02E87083FA"	{"name": "Robinfun", "symbol": "ROBINFUN", "decimals": 18, "decimalsResolved": true}
+"0x25fA504D2aBD366cb3485702A93a5F95faC2d41c"	{"name": "Test", "symbol": "TEST", "decimals": 18, "decimalsResolved": true}
+"0xa7CAEEDE1c482F6F939aAfF1FfaC440578120E43"	{"name": "Last test", "symbol": "TEST", "decimals": 18, "decimalsResolved": true}
+"0x9f04e64fB6dcA6b6689211E99695A4BBD31bE6D5"	{"name": "CHUMHOOD", "symbol": "CHUMHOOD", "decimals": 18, "decimalsResolved": true}
+"0x61fc6AC80BF8115326B7d8420B9Fbfb9f8D5af02"	{"name": "Feathers.cc", "symbol": "Feathers", "decimals": 18, "decimalsResolved": true}
+"0xFB0f3e22A14D2D6953B8760EEBb13b840a12D891"	{"name": "We Are The Anonymous", "symbol": "ANON", "decimals": 18, "decimalsResolved": true}
+"0xa15E8847389BAF535307b1c185429B6B80296C21"	{"name": "Beggar Robin Hood", "symbol": "BEGGAR", "decimals": 18, "decimalsResolved": true}
+"0xDCa6da2ADcebE397C15f348F6EE38EE0eBe6b867"	{"name": "FIDEL", "symbol": "FIDEL", "decimals": 18, "decimalsResolved": true}
+"0xC246bb450E761de2DBa7Fb115AffBf508E89C5e1"	{"name": "RapidHood Test", "symbol": "RHT", "decimals": 18, "decimalsResolved": true}
+"0x68F46C1B5FA6f5F190E16B7B7EC77A087F94919A"	{"name": "My Robin Hood", "symbol": "MRH", "decimals": 18, "decimalsResolved": true}
+"0xb5B6dC8dAf6a63334386F87D98348966036D851D"	{"name": "Pepe in Hood", "symbol": "PEPEHOOD", "decimals": 9, "decimalsResolved": true}
+"0x0BE8f54D5f2C71C5750157ae3D1dEDEd176733ff"	{"name": "Hello Stonk", "symbol": "HELLO", "decimals": 18, "decimalsResolved": true}
+"0x0299B32daA45a79C6fe1152bb5E12a8c4aF81a61"	{"name": "ROBINHOODDICKFART", "symbol": "ROBINHOODD", "decimals": 18, "decimalsResolved": true}
+"0xb849629578293CbC7F379E6162f66E046749EF2E"	{"name": "stonks.fun", "symbol": "STONKS", "decimals": 18, "decimalsResolved": true}
+"0x2188DcdE2796E1bD99c2B7F37956D34521f3ED37"	{"name": "stonks.fun", "symbol": "STONKS", "decimals": 18, "decimalsResolved": true}
+"0x180f7188ca422b1e24408C337f745a8646164BA3"	{"name": "TEST", "symbol": "TEST", "decimals": 18, "decimalsResolved": true}
+"0x54df2cc5d881694Ec04B3449F1ADbe943C715611"	{"name": "Mr Bean", "symbol": "BEAN", "decimals": 18, "decimalsResolved": true}
+"0x3E13090A0154F15349999be03ac7772242735e80"	{"name": "UniPepe", "symbol": "UPEPE", "decimals": 18, "decimalsResolved": true}
+"0x1347EeD54D917b58b3532397F0FA31F1B2E89402"	{"name": "$.img", "symbol": ".img", "decimals": 18, "decimalsResolved": true}
+"0x8C59248704E67A32e76b8adBA0FB22e983a7665e"	{"name": "Nightmare Vault", "symbol": "NMVLT", "decimals": 18, "decimalsResolved": true}
+"0xeac1635610121293bC33a0C03170E148b2369d71"	{"name": "Celeris HFT", "symbol": "CELERIS", "decimals": 18, "decimalsResolved": true}
+"0x312228F021A2067b71767c0Ba71Fe0e8Ede794e9"	{"name": "robinhood test", "symbol": "SDFSDF", "decimals": 18, "decimalsResolved": true}
+"0xb1cFc02c47004c75ef42EC7794426B0ADa2Eb1CA"	{"name": "fdgfdg", "symbol": "DFG", "decimals": 18, "decimalsResolved": true}
+"0x55a1DD12C7401Ba98A1A4db4F37CaedB53533130"	{"name": "fghj", "symbol": "FGHJ", "decimals": 18, "decimalsResolved": true}
+"0x6D63a91A9d42174C8feb75aaA3d8D2Ed1C04a4CC"	{"name": "tst", "symbol": "TST", "decimals": 18, "decimalsResolved": true}
+"0x86DD581190432D1cB87Bf6af5e8F9DAF461bFaE0"	{"name": "Throbbing Boob", "symbol": "TBOOB", "decimals": 18, "decimalsResolved": true}
+"0x9971A255C5d18828c4ddD50D0676AC000ec120Af"	{"name": "catcat", "symbol": "CATCAT", "decimals": 18, "decimalsResolved": true}
+"0xb194F1524634ea9E441f2B36AAD6c6CFdB3FA56d"	{"name": "TEST23", "symbol": "TESTT23", "decimals": 18, "decimalsResolved": true}
+"0x97578A2780cF55e1247604Bf23a9CeeD4543C040"	{"name": "ThornHill", "symbol": "THORN", "decimals": 18, "decimalsResolved": true}
+"0x49D0B0f36cfbE157E61ffE34f0D5f9a6F7Cb0040"	{"name": "ThornHill", "symbol": "THORN", "decimals": 18, "decimalsResolved": true}
+"0x8d6C60a1499173e55FA5f221b4a8d2e96Cb7C040"	{"name": "ThornHill", "symbol": "THORN", "decimals": 18, "decimalsResolved": true}
+"0xB28B5cc24f42C7A4fd5Cc70569cfad53dA514040"	{"name": "ThornHill", "symbol": "THORN", "decimals": 18, "decimalsResolved": true}
+"0xdc9755A512592C9fe140A813492e8dE49C7bFe39"	{"name": "ROBINAGENT", "symbol": "ROBAGENT", "decimals": 18, "decimalsResolved": true}
+"0x2a39E246d4a7EFfCFe2f11ED7AA41fdCfb428AE5"	{"name": "XForen", "symbol": "XFRN", "decimals": 18, "decimalsResolved": true}
+"0xA2718f80f1FE0CdeC69c9023ee006807dD487a8c"	{"name": "YOINK", "symbol": "YOINK", "decimals": 18, "decimalsResolved": true}
+"0x64B6De2AD66b6220C1C8aeaf39C978002638dB3f"	{"name": "Plume", "symbol": "PLUME", "decimals": 18, "decimalsResolved": true}
+"0x74428efa4C9C44Aae7C06088a79Bd6753065ad1F"	{"name": "Robin Reward Token", "symbol": "ROBIN", "decimals": 18, "decimalsResolved": true}
+"0xFA1A3E1cb617706B1f7d65B89Cc4199042c3f4b6"	{"name": "Real Weird Ass", "symbol": "RWAS", "decimals": 18, "decimalsResolved": true}
+"0x389A74Ec0F9b966D462937e11E94C41467A20040"	{"name": "ThornHill", "symbol": "THORN", "decimals": 18, "decimalsResolved": true}
+"0xa870f8C7CAE9705194a141b0C2964B6C79ee3742"	{"name": "🪶", "symbol": "🪶", "decimals": 18, "decimalsResolved": true}
+"0x7B0E400F92EEd5106782E92B05A852C3543F6c2a"	{"name": "Bulgarian Bull", "symbol": "TENEV", "decimals": 18, "decimalsResolved": true}
+"0x838cbD4053C0cEcA77e2390fEa18884CBcD21061"	{"name": "The Green Bull", "symbol": "VLAD", "decimals": 18, "decimalsResolved": true}
+"0x3844563fc06D367299d1099b297c891aa83059a4"	{"name": "David Blythe RWA", "symbol": "DBRWA", "decimals": 6, "decimalsResolved": true}
+"0x81e6B2f0319efAD11EF40F927b4606dB89C2Bc65"	{"name": "JackHood", "symbol": "JACK", "decimals": 18, "decimalsResolved": true}
+"0xEdD60AB7a13B98233ef0D5D108215a88a9aB6fcd"	{"name": "HoodJack", "symbol": "HOOD", "decimals": 6, "decimalsResolved": true}
+"0x014f93D6dB39131E263b38f3BFB3454965DB87e4"	{"name": "Loxley", "symbol": "LOXLEY", "decimals": 18, "decimalsResolved": true}
+"0xa9bB2eD6d47C76Dd3275A18E3A6B9851201C7EcA"	{"name": "Loxley", "symbol": "LOXLEY", "decimals": 18, "decimalsResolved": true}
+"0xb55ce0a5846aA1a4EdC437281aEe6c8854d60040"	{"name": "ThornHill", "symbol": "THORN", "decimals": 18, "decimalsResolved": true}
+"0x9DD7Fe0e4d8db575018A56Ca6b72FE9B93A0b510"	{"name": "XtraRichPeople", "symbol": "XRP", "decimals": 18, "decimalsResolved": true}
+"0x78944fA45Ae8CDF12Ca98E2b90fAf3E0a7565713"	{"name": "testcoin", "symbol": "TESTOCIN", "decimals": 18, "decimalsResolved": true}
+"0x65e09Afd4660A05A1AF7e3BA5E16684368538625"	{"name": "Galactic Grime", "symbol": "GGRM", "decimals": 18, "decimalsResolved": true}
+"0xef98251c7676FC68832574491AcBf688d259BF5D"	{"name": "REPLY", "symbol": "REPLY", "decimals": 18, "decimalsResolved": true}
+"0x7FB0671E24E5e0337eBC5310F184DFb33a28cCB9"	{"name": "stonks.fun", "symbol": "STONKS", "decimals": 18, "decimalsResolved": true}
+"0xe1651d6BAcC64A0F3DCdCF0D1BBad4419212b490"	{"name": "BankrHood", "symbol": "BANKR", "decimals": 18, "decimalsResolved": true}
+"0x29991Ca8bFE6E2508C5bcB14772e95A8B34247A7"	{"name": "Dumpy", "symbol": "DUMPY", "decimals": 18, "decimalsResolved": true}
+"0xB623C0b023cAD1F553D07D7dE5aa031C7d1604Da"	{"name": "hoodies.finance", "symbol": "hoodies", "decimals": 18, "decimalsResolved": true}
+"0x63954F8FB2608B0af5e4f7bDa0bBcE355f7e5b76"	{"name": "OneToken", "symbol": "ONETOKEN", "decimals": 18, "decimalsResolved": true}
+"0x82a3Ae007355AE7F8f09713275ce6694F5e57E5B"	{"name": "THUNDER CAT", "symbol": "THUNDERCAT", "decimals": 18, "decimalsResolved": true}
+"0x924F0df23c43Ec806cbb47537344becc760F78F5"	{"name": "OGCT coin", "symbol": "OGCT", "decimals": 18, "decimalsResolved": true}
+"0x3cA0B28f7d13c86488701f347b7308d8e1eb0D54"	{"name": "onehood", "symbol": "HOOD", "decimals": 18, "decimalsResolved": true}
+"0x3A122FAb56f4Add2061569F844ABaC6267b91865"	{"name": "ClawdAi", "symbol": "CLAWD", "decimals": 18, "decimalsResolved": true}
+"0x911925b801FFa02613717A302c799af60da75D87"	{"name": "Hood Mascot", "symbol": "MASCOT", "decimals": 18, "decimalsResolved": true}
+"0x129b6cd98E91dCe1e5bb1E8374A3dF1992Ef95c8"	{"name": "Pixel Paradox", "symbol": "PIXPAR", "decimals": 18, "decimalsResolved": true}
+"0xdCD6B28E229b20b4aa7AE77f3aCCA746e97a5Cb9"	{"name": "Meteor Mammoth", "symbol": "METMAMM", "decimals": 18, "decimalsResolved": true}
+"0xE593FF65570402E94AF69AD214181d45FC7Ee029"	{"name": "THE WHITE BULL", "symbol": "VLAD", "decimals": 18, "decimalsResolved": true}
+"0xCCE63b81899D1B7Afd93b359b3a92BBBBBD8B03e"	{"name": "RWAing", "symbol": "RWAing", "decimals": 18, "decimalsResolved": true}
+"0x85B2FA7711908884663E43f830CedB78ab6f65C4"	{"name": "Githood", "symbol": "GITHOOD", "decimals": 18, "decimalsResolved": true}
+"0x58261fB11654C5df9b47eB31dB919c94bDA34E31"	{"name": "Poptye the Goat", "symbol": "GOAT", "decimals": 18, "decimalsResolved": true}
+"0xD824835ab659382a96094F9e05B2146306E2a399"	{"name": "TrollI In Hood", "symbol": "HOODTROLL", "decimals": 6, "decimalsResolved": true}
+"0x8FDc1f875C75419de1933265C44A868Db85e5499"	{"name": "BUBA HOOD", "symbol": "BUBA", "decimals": 6, "decimalsResolved": true}
+"0xe8DFEa4CE952BE956Fad851fc042C7BFb4129271"	{"name": "SHERWOOD", "symbol": "SHR", "decimals": 18, "decimalsResolved": true}
+"0x5Ccc5A80548d55f0D9A8052736fc33a316a7763b"	{"name": "Quiver", "symbol": "QUIVER", "decimals": 18, "decimalsResolved": true}
+"0x5bd252b4D7AA573813D1c6A4888f778790583667"	{"name": "STOCKCOIN", "symbol": "STOCKCOIN", "decimals": 18, "decimalsResolved": true}
+"0xD87f4704BF6baa09461D1E44AD5C7FE2A0C286C4"	{"name": "The Degen Bull", "symbol": "DEGEN", "decimals": 18, "decimalsResolved": true}
+"0x019314390a0Ad23Bff875e70D0d99878928CaE4b"	{"name": "Registered Flex Offender", "symbol": "RFO", "decimals": 18, "decimalsResolved": true}
+"0xD876aA6db9C7EA50feab8173465526a6B075d56f"	{"name": "DECIDUEYE", "symbol": "DECIDUEYE", "decimals": 18, "decimalsResolved": true}
+"0xa1A9D363B89C797E9cE440a5Fd9A0a9578a36837"	{"name": "Suits", "symbol": "SUITS", "decimals": 18, "decimalsResolved": true}
+"0x6E47d95928CB39b5E51bE425Aab2A5190418E943"	{"name": "buy and retire", "symbol": "530A", "decimals": 18, "decimalsResolved": true}
+"0xc10AF31f98a6aF697Af0785E9F748F5d2D280743"	{"name": "Cat In Hood", "symbol": "CIH", "decimals": 18, "decimalsResolved": true}
+"0x2F5694e841dFa2E24e4Ab1d3B450e79D8ec10054"	{"name": "Mr Bell", "symbol": "BELL", "decimals": 18, "decimalsResolved": true}
+"0x8DA7a22510Ddb1525086A523D302BAdB225e3aF5"	{"name": "DegenZ Fun", "symbol": "DEGENZ", "decimals": 18, "decimalsResolved": true}
+"0x0E1bc840677276dE7E9C90f3D01A5ecf0a8aBFa0"	{"name": "NIGGABALLZ", "symbol": "NIGGABALLZ", "decimals": 18, "decimalsResolved": true}
+"0xC12DCE33661C6cd7450b550A1a780E3335967d07"	{"name": "HOODWATCH · 25 stocks · no pending action", "symbol": "HOODWATCH", "decimals": 18, "decimalsResolved": true}
+"0x0834FA0389DB4682342df665E004fE2e5F65aBA3"	{"name": "ROBINHOODDICKFART", "symbol": "RHDF", "decimals": 18, "decimalsResolved": true}
+"0x70A03D64a77DC941de34953257Ae92939B2f195D"	{"name": "Stonks.fun", "symbol": "STONKS", "decimals": 18, "decimalsResolved": true}
+"0xd11B88444ca59962700C7465c09B8BbEf45602Fb"	{"name": "Bankr", "symbol": "BANKR", "decimals": 18, "decimalsResolved": true}
+"0x30CeBb54642dc7387d55cd2fD56f96d9DAE47729"	{"name": "test", "symbol": "test", "decimals": 18, "decimalsResolved": true}
+"0x1210091ae19310bF88f1D4C26F10feebB5a45ba3"	{"name": "test", "symbol": "TEST", "decimals": 18, "decimalsResolved": true}
+"0x1F281c6656594081FDFe80c5A47BdD33b884DBA3"	{"name": "Bankr Hood", "symbol": "BNKRHOOD", "decimals": 18, "decimalsResolved": true}
+"0x3c461ce3900Fd3829b9f3edCd581fE5a74215bA3"	{"name": "test2", "symbol": "TEST", "decimals": 18, "decimalsResolved": true}
+"0xe2603511973FAe0d0a0a4608F082E53a3888ABA3"	{"name": "ROBINHOODDICKFART", "symbol": "RHDF", "decimals": 18, "decimalsResolved": true}
+"0xdB36774A5eC917F00A622F57a8aBe518869e9BA3"	{"name": "HoodTrade", "symbol": "HT", "decimals": 18, "decimalsResolved": true}
+"0xe6449a0Ae59dd71B12FC693b8AF80044ceCCEb72"	{"name": "RobinHook", "symbol": "HOOK", "decimals": 18, "decimalsResolved": true}
+"0xFb34a0e8A1CF8149676acF7818A786A1Bd8a4349"	{"name": "BROKE", "symbol": "BROKE", "decimals": 18, "decimalsResolved": true}
+"0x1BbF1B16D3228A88758c326bA27bf956A12f5D87"	{"name": "Fletch AI", "symbol": "FLETCH", "decimals": 18, "decimalsResolved": true}
+"0xa28D7D4C9B26FF25c55C1fE3187eC550e4799bA3"	{"name": "ROBINHOODDICKFART", "symbol": "RHDF", "decimals": 18, "decimalsResolved": true}
+"0xfB4729659eeF22Bfc1c2B680F6F873f8147aaaab"	{"name": "Robin", "symbol": "ROBIN", "decimals": 6, "decimalsResolved": true}
+"0x04d3E51cC6Fc34A75Ea16881b04A8811c0731Ba3"	{"name": "ROBINHOODDICKFART", "symbol": "ROBI", "decimals": 18, "decimalsResolved": true}
+"0x07bd9f743E7e9e37EC5Ac65A4a664418fa5eEBa3"	{"name": "8CentsInAJar", "symbol": "8CEN", "decimals": 18, "decimalsResolved": true}
+"0x0303A02D8B022AC37E4e75d62D383eC13c2AFbA3"	{"name": "capy", "symbol": "CAPY", "decimals": 18, "decimalsResolved": true}
+"0x09F8B6140f7A2690aA49Ad818cA53b867131fBA3"	{"name": "vlad tenev", "symbol": "TENEV", "decimals": 18, "decimalsResolved": true}
+"0x00091E4e5d4C4b9AF909748371Ae73EADfC54bA3"	{"name": "bankr in hood", "symbol": "BIH", "decimals": 18, "decimalsResolved": true}
+"0xEFdc531b862ffa8eb1319a14916c4f5851505Ba3"	{"name": "The Green Bull", "symbol": "VLAD", "decimals": 18, "decimalsResolved": true}
+"0x42CA6A54498e1533D03660F785e16545A88F5Ba3"	{"name": "HoodTrade", "symbol": "HT", "decimals": 18, "decimalsResolved": true}
+"0x93f1db4DE40c46aa77Bdc6f2A5F7036687F63ba3"	{"name": "The Green Bull", "symbol": "VLAD", "decimals": 18, "decimalsResolved": true}
+"0x6a9A92A9635d8Df488231825cF9bc227BeC71bA3"	{"name": "Fox Under Hood", "symbol": "FUH", "decimals": 18, "decimalsResolved": true}
+"0x339F6D3bF49B124EA4937Bf3E0cf8A1F8D0AeBa3"	{"name": "ClawHood", "symbol": "ClawHood", "decimals": 18, "decimalsResolved": true}
+"0xeEA964D9A241f8066C1C5466f2d269b541245bA3"	{"name": "ROBINHOODDICKFART", "symbol": "ROBI", "decimals": 18, "decimalsResolved": true}
+"0x8E5c4A0d187cC2BDd393142b7764f86a83558bA3"	{"name": "Quiverhood", "symbol": "Quiver", "decimals": 18, "decimalsResolved": true}
+"0x41d2cB22fcBBA6193C3dbfBf7cF6D57AB790dba3"	{"name": "CASHCAT", "symbol": "CASHCAT", "decimals": 18, "decimalsResolved": true}
+"0x7418cB80C8Ee039D0a9DDbaAC95F500C7F3aBbA3"	{"name": "ROBINHOODDICKFART", "symbol": "RHDF", "decimals": 18, "decimalsResolved": true}
+"0xF416b2449068bF056E2C8Aa53F6784B692913Ba3"	{"name": "FLYNN", "symbol": "FLYNN", "decimals": 18, "decimalsResolved": true}
+"0x6d0c30713Cca5921A1eAe1093e887063630A3Ba3"	{"name": "ROBINHODDICKFART", "symbol": "RHDF", "decimals": 18, "decimalsResolved": true}
+"0xfC6232E97cad14724029EbCD6eAFA30A267D6ba3"	{"name": "ROBINHOODDICKFART", "symbol": "ROBINHOODDICKFART", "decimals": 18, "decimalsResolved": true}
+"0x8932556781A440f05049F4603f3cA3F36B30fba3"	{"name": "SMART", "symbol": "SMART", "decimals": 18, "decimalsResolved": true}
+"0x700d1Fd8EA5B14A6a34Ba065c1a8aE7D44f25ba3"	{"name": "ROBINHOODDICKFART", "symbol": "ROBI", "decimals": 18, "decimalsResolved": true}
+"0xA5fFbEb0f02205EB5eCA92eba95E9f1670B78BA3"	{"name": "ROBINHOODDICKFART", "symbol": "ROBINHOODDICKFART", "decimals": 18, "decimalsResolved": true}
+"0x4FA15813EE6a07B4ff63B29DFA2E2117F3E56ba3"	{"name": "Reaper Farm", "symbol": "REAPER", "decimals": 18, "decimalsResolved": true}
+"0x9a689Dc690a4De44c940C057f5DA2358DD9cfBA3"	{"name": "negro", "symbol": "negro", "decimals": 18, "decimalsResolved": true}
+"0x65Ce1069F090c1381fA2446e859790A3A261cbA3"	{"name": "Cash Cat", "symbol": "CASHCAT", "decimals": 18, "decimalsResolved": true}
+"0x6fbd558A0a1E9F1f4e53C92417D7D92Ae86FDbA3"	{"name": "Bankr In Hood", "symbol": "BIH", "decimals": 18, "decimalsResolved": true}
+"0x528A48F91F8223D725C9B14F1725CA08C7d1cBa3"	{"name": "BOYZNTHEHOOD", "symbol": "BOYZ", "decimals": 18, "decimalsResolved": true}
+"0xAB39544523B589F9CeF7071290FaFfa2f88bfD36"	{"name": "Onchainhoodies", "symbol": "Hoodies", "decimals": 18, "decimalsResolved": true}
+"0x369Ac5EB69bFb9FD4B20970E23E94D1eEE060Ba3"	{"name": "Russell In Hood", "symbol": "RIH", "decimals": 18, "decimalsResolved": true}
+"0xb9e2c0Cc8451e9149Ac8311727E45B5131DFEbA3"	{"name": "the heroes", "symbol": "ROBIN", "decimals": 18, "decimalsResolved": true}
+"0x43b6dC3A6fEC4180E43C83E42D294CBEacfc8BA3"	{"name": "Hood Name Service", "symbol": "HNS", "decimals": 18, "decimalsResolved": true}
+"0xF57aB300A37103DaF59F87855949Bc526e8B4ba3"	{"name": "Russell In Hood", "symbol": "RIH", "decimals": 18, "decimalsResolved": true}
+"0x127cA274d0a248f2194174A19F2773CD5bC10ba3"	{"name": "Beacon", "symbol": "BEACON", "decimals": 18, "decimalsResolved": true}
+"0x74e61dB65225fBd2f776f60273ab3d5071474ba3"	{"name": "Arrow", "symbol": "ARROW", "decimals": 18, "decimalsResolved": true}
+"0x6d626cd783AD80be24E11ecE1c6b1b1E4530DbA3"	{"name": "test", "symbol": "test", "decimals": 18, "decimalsResolved": true}
+"0xE809D9E909F9171031630a6822bF520a7bE4BBa3"	{"name": "Beacon", "symbol": "BEACON", "decimals": 18, "decimalsResolved": true}
+"0xD563D08AF27d5BCaE13c3769eae99f5E3Ef4AbA3"	{"name": "Arrow", "symbol": "ARROW", "decimals": 18, "decimalsResolved": true}
+"0xd2e74a883bE16D76af669c9A61680ca37088bBA3"	{"name": "BEACON", "symbol": "BEACON", "decimals": 18, "decimalsResolved": true}
+"0x24Ea7d144D7Ed93A1DD2151301BCa9eF4c3C2BA3"	{"name": "AGENT 404", "symbol": "404", "decimals": 18, "decimalsResolved": true}
+"0xCBf94fE799D851B7e23FEE228f05ea53C0dEdBA3"	{"name": "capyhood", "symbol": "CAPYHOOD", "decimals": 18, "decimalsResolved": true}
+"0x552CC1A2F94B0c48C6b18cdd22b5D178Db85bba3"	{"name": "hoodrun", "symbol": "HOODRUN", "decimals": 18, "decimalsResolved": true}
+"0x431B2D2050Bed76565fdB703c1203cb4a9eCEbA3"	{"name": "robinhood", "symbol": "robinhood", "decimals": 18, "decimalsResolved": true}
+"0x294BA0EE64F990D8A39016f97561Caab4A90Aba3"	{"name": "LobbyFinance", "symbol": "LOBBYFI", "decimals": 18, "decimalsResolved": true}
+"0x7058d0f8107Fd4BAF4FF1d56A40249EaB99b5BA3"	{"name": "Men In Tights", "symbol": "MIT", "decimals": 18, "decimalsResolved": true}
+"0xAaa710690Ce629bCA08bD999919893570d8B1Ba3"	{"name": "hoodrun", "symbol": "HOODRUN", "decimals": 18, "decimalsResolved": true}
+"0x47B6EEdbB99f535bfd96de38B5fC03d4D86B8ba3"	{"name": "BEACON", "symbol": "BEACON", "decimals": 18, "decimalsResolved": true}
+"0x67A45F5a5Fe274F93DfcFaa920902d09C552d505"	{"name": "Babyhood", "symbol": "Babyhood", "decimals": 18, "decimalsResolved": true}
+"0xebf1D0Ecb17c144A59469d90aCe7318e4b89Cba3"	{"name": "hoodtest", "symbol": "HOODTEST", "decimals": 18, "decimalsResolved": true}
+"0x1ddf3013aAfD5390A736f610D9058551C2608Ba3"	{"name": "the heroes", "symbol": "ROBIN", "decimals": 18, "decimalsResolved": true}
+"0x328BdEa737b8647E983eB61e60EFc63ea9aDFba3"	{"name": "ClawHood", "symbol": "ClawHood", "decimals": 18, "decimalsResolved": true}
+"0x556789d721Fd04982056Bd2D61dA4B9c1fa96ba3"	{"name": "Beacon The Hood", "symbol": "BEACON", "decimals": 18, "decimalsResolved": true}
+"0x7968A556752e04DdCa36128f5bd4cae3eb011e11"	{"name": "Onchainhoodies", "symbol": "Hoodies", "decimals": 18, "decimalsResolved": true}
+"0x8c180f953577A982BE6Ff9875235EeA7CdbBbba3"	{"name": "Quiverhoodchain", "symbol": "Quiver", "decimals": 18, "decimalsResolved": true}
+"0xBA5c71FDFd8aEBf8F50005E45550AE50c4323BA3"	{"name": "xhood", "symbol": "XHOOD", "decimals": 18, "decimalsResolved": true}
+"0xF9E54459511F96e6E24823c1E945501a33718Ba3"	{"name": "BankrHood", "symbol": "BNKRHOOD", "decimals": 18, "decimalsResolved": true}
+"0xbb70693AA4C21129FaCd60A38fEA5239DcB56ba3"	{"name": "BankrHood", "symbol": "BNKRHOOD", "decimals": 18, "decimalsResolved": true}
+"0x3BCad51C1774c8e71b451Df51aaa5383D32eaba3"	{"name": "Street Sentinel", "symbol": "STREET", "decimals": 18, "decimalsResolved": true}
+"0x40ef591ff0c7815F4108EF01E5Bf25A231b98ba3"	{"name": "Block Bandit", "symbol": "BANDIT", "decimals": 18, "decimalsResolved": true}
+"0x1e5aA9e089Dc1DF5d982564E1342Fd2940553BA3"	{"name": "Shadow Shifter", "symbol": "SHIFT", "decimals": 18, "decimalsResolved": true}
+"0x45b8A8EDC3cf732503A82896F7E742c916e99Ba3"	{"name": "Neon Nomad", "symbol": "NOMAD", "decimals": 18, "decimalsResolved": true}
+"0x351D3b98BfA49fe70CeA7f101e7f501e4c193ba3"	{"name": "Chain Reaper", "symbol": "REAPER", "decimals": 18, "decimalsResolved": true}
+"0x8dF3fB1F13e335E39AA4A412Ca2A3d67031d2BA3"	{"name": "Hood Ghost", "symbol": "GHOST", "decimals": 18, "decimalsResolved": true}
+"0xFB96Ad7317B378502fa10a4EC021142BD29bFbA3"	{"name": "Binary Brawler", "symbol": "BRAWL", "decimals": 18, "decimalsResolved": true}
+"0xcF4b0B3E16A270765143636F03a1B64609f45Ba3"	{"name": "Alley Agent", "symbol": "ALLEY", "decimals": 18, "decimalsResolved": true}
+"0x72e20Fe754191F5fd622B942cF51EF0e46b5Eba3"	{"name": "Glitch Goon", "symbol": "GOON", "decimals": 18, "decimalsResolved": true}
+"0xC65A63E8dcfF5102FcCa1F4d31C7Fa4b3b4Cdba3"	{"name": "Vault Raider", "symbol": "RAIDER", "decimals": 18, "decimalsResolved": true}
+"0x3445d84cbEe2b43548399342C23Ec4839839AbA3"	{"name": "HOODAGENT", "symbol": "HOODAGENT", "decimals": 18, "decimalsResolved": true}
+"0xa7eA01168D92AA12b19634b897F8772750acaBa3"	{"name": "robinhood", "symbol": "robinhood", "decimals": 18, "decimalsResolved": true}
+"0xba54D0d1eabE4BdF3Aa476b7668D79A94a4A2BA3"	{"name": "PIKADEX", "symbol": "PIKADEX", "decimals": 18, "decimalsResolved": true}
+"0xebe7F7716009dfa06dE811A041C02Cb3E9EA5ba3"	{"name": "Deployer In Hood", "symbol": "DIH", "decimals": 18, "decimalsResolved": true}
+"0x2D8A32d596a3d07E135E7634B68B559B898faBa3"	{"name": "rialto", "symbol": "RIALTO", "decimals": 18, "decimalsResolved": true}
+"0xF2053b7F5F2a815c4d09bd52a79145Fe38d94BA3"	{"name": "The BlueBull", "symbol": "Ensam", "decimals": 18, "decimalsResolved": true}
+"0xd5fd4657c927cCe54E2Fbea188D5d7a68B4EfbA3"	{"name": "ROBINHOODDHASHART", "symbol": "ROBINHOODDHASHART", "decimals": 18, "decimalsResolved": true}
+"0xBAA618EC0B8D91019B5217fd69BFE09f1a09FbA3"	{"name": "Jail Robinhood", "symbol": "JAILHOOD", "decimals": 18, "decimalsResolved": true}
+"0xE053DFbEeeB72E45e901b0142117930f6e4baba3"	{"name": "BSCSZN", "symbol": "BSCSZN", "decimals": 18, "decimalsResolved": true}
+"0x9E257B50188d0740F341D81f05CE3F2180A46Ba3"	{"name": "AnsemHood", "symbol": "ANSEMHOOD", "decimals": 18, "decimalsResolved": true}
+"0xA7d8FECdc30eeD954C113Af504C021a086d4AbA3"	{"name": "ROBINHOODDICKFART", "symbol": "ROBINHOODDICKFART", "decimals": 18, "decimalsResolved": true}
+"0xe27A301a5d576EF983DF1018e0DBEbb8Cb92aba3"	{"name": "Githood", "symbol": "GITHOOD", "decimals": 18, "decimalsResolved": true}
+"0xD73Cb29d7BFa46437b77cdE88Fc4cafdD8a62Ba3"	{"name": "Interfold", "symbol": "FOLD", "decimals": 18, "decimalsResolved": true}
+"0xF95A75fC031aB3a573b3DaEDA71bbD20033c8Ba3"	{"name": "Tongue Tongue Tongue Sahur", "symbol": "👅👅👅", "decimals": 18, "decimalsResolved": true}
+"0xd799D4728b01a6C926C58e8d1FE5a20A248F8ba3"	{"name": "hoodbot", "symbol": "HOOD", "decimals": 18, "decimalsResolved": true}
+"0x6880124072156e18A0aD3A996Ef17a848d7e9bA3"	{"name": "nia", "symbol": "NIA", "decimals": 18, "decimalsResolved": true}
+"0x642F5AF42faDb6fd4048096619843E3bA6a28Ba3"	{"name": "HOODCAT", "symbol": "HOODCAT", "decimals": 18, "decimalsResolved": true}
+"0x81734d5F0988527478E6AEB5C218F61Bd2f8BbA3"	{"name": "First Runner on Robinhood", "symbol": "RRUNNER", "decimals": 18, "decimalsResolved": true}
+"0xb9793b1C00eb0d5d91a4fF806c444dCAFF066ba3"	{"name": "ORCHAD", "symbol": "ORCHAD", "decimals": 18, "decimalsResolved": true}
+"0xc8f6fE00F659d536ecD3055655A5B0bA0EC83bA3"	{"name": "githood", "symbol": "GITHOOD", "decimals": 18, "decimalsResolved": true}
+"0xf5f6495A7dA3e5d1cBD63cE8C067F1523dd5bbA3"	{"name": "ORCHAD", "symbol": "ORCHAD", "decimals": 18, "decimalsResolved": true}
+"0x4Aa76089aA0F6B4F938663b27FC6B21C89dCdBa3"	{"name": "githood", "symbol": "GITHOOD", "decimals": 18, "decimalsResolved": true}
+"0xB23590be44F8801E4ee345eD142c135af634BBa3"	{"name": "ORCHADHOOD", "symbol": "ORCH", "decimals": 18, "decimalsResolved": true}
+"0x4504C8bf896f1BFd44DD79589074e4891E2cCBA3"	{"name": "FROGGY", "symbol": "FROGGY", "decimals": 18, "decimalsResolved": true}
+"0x2BfED756796463788C07f12f23c592580991fbA3"	{"name": "AVRGMxAI", "symbol": "AVRGMxAI", "decimals": 18, "decimalsResolved": true}
+"0x3bFAf63Fa1CbCE3ce608965eb3a90e4a539c7bA3"	{"name": "ClankerHood", "symbol": "CLANKHOOD", "decimals": 18, "decimalsResolved": true}
+"0x772c4512048bE0BeF9AC9f32c029514Df0855BA3"	{"name": "FROGGYHOOD", "symbol": "FROGGY", "decimals": 18, "decimalsResolved": true}
+"0x380344a48378df060EB24fF6B8Acb511E14B8BA3"	{"name": "AGENT402", "symbol": "AGENT402", "decimals": 18, "decimalsResolved": true}
+"0x22CADD3c0141d71Ff4a2934BfB4eb9F026543BA3"	{"name": "Clankerhood", "symbol": "CLANKHOOD", "decimals": 18, "decimalsResolved": true}
+"0x9ebb695e5187e856C4562aeD7b7c543f5d37BBa3"	{"name": "Stars Hood", "symbol": "STARS", "decimals": 18, "decimalsResolved": true}
+"0xE4f336A5e8Bb1807271eF0e7f2BBD4091A4D9BA3"	{"name": "Claude Code Wrapped", "symbol": "ccwrapped", "decimals": 18, "decimalsResolved": true}
+"0x281BfF30721d05A7eeDDfE1Ae18DF78A908b2ba3"	{"name": "deplohood", "symbol": "DEPLOHOOD", "decimals": 18, "decimalsResolved": true}
+"0x550C64d1a276ff558C1DE9879EEd0AA661873ba3"	{"name": "HoodScope", "symbol": "HoodScope", "decimals": 18, "decimalsResolved": true}
+"0x98473edfb13877Ba83Fa65E9Cb676eB0D031a591"	{"name": "Seedbound", "symbol": "SEED", "decimals": 18, "decimalsResolved": true}
+"0xA138975B14f1F6BB595715C77e22ea9eD2732A99"	{"name": "The Hood Bull", "symbol": "VLAD", "decimals": 6, "decimalsResolved": true}
+"0x8930130b0C0b6C0997CfED70F99eA17a8A0e93f1"	{"name": "SpuceX", "symbol": "SPCX", "decimals": 6, "decimalsResolved": true}
+"0x253beC866429c1747e4Aa2fBa0B7A0C3C73B8ee0"	{"name": "HOODIE GANG", "symbol": "HOODIE", "decimals": 18, "decimalsResolved": true}
+"0x0a31BB991bf61e24D82009E05792a6a6547468f9"	{"name": "robun hewd", "symbol": "HEWD", "decimals": 18, "decimalsResolved": true}
+"0x03ffA8958773476dF06Cf15975EC6dB988B7Ba56"	{"name": "DogeWifHood", "symbol": "DOGE", "decimals": 18, "decimalsResolved": true}
+"0x32854EeD6554b5Da50F782970a21a47E0fC66602"	{"name": "Cashcat In Hood", "symbol": "CCIH", "decimals": 18, "decimalsResolved": true}
+"0x25c219a1A6b82744CEfBb54fc350Ff7F4D2c8B97"	{"name": "anon", "symbol": "ANON", "decimals": 18, "decimalsResolved": true}
+"0x84aD72f6FD6bcCab5b5aa4F3C9ab86863bD2bCDa"	{"name": "HoodAgent", "symbol": "HOODAGENT", "decimals": 18, "decimalsResolved": true}
+"0x0595fdeCc7F9e0b53a01396c49389F9573e6bBa3"	{"name": "CLANKERHOOD", "symbol": "CLANKERHOOD", "decimals": 18, "decimalsResolved": true}
+"0x08e81A738A25c30013567089714fbD402C6aDBA3"	{"name": "STAKR", "symbol": "STAK", "decimals": 18, "decimalsResolved": true}
+"0x07b81285E1Ad814CF2c4a8774F377581714E2bA3"	{"name": "The Green Wolf", "symbol": "WOLF", "decimals": 18, "decimalsResolved": true}
+"0x09620b92fFe27122f05886370C5D015aF1f89Ba3"	{"name": "Deepak Rao", "symbol": "DRAO", "decimals": 18, "decimalsResolved": true}
+"0x67655eE41F5C97A0f09C03090Aa0733d78376bA3"	{"name": "Garl Protocol", "symbol": "GARL", "decimals": 18, "decimalsResolved": true}
+"0x37d0D36D1f8e002Bdb2e338f4876D99C7F271Ba3"	{"name": "Robin Hood", "symbol": "$Fox", "decimals": 18, "decimalsResolved": true}
+"0x6feBdA339664D16e02c08Bd64f37A601b87b6ba3"	{"name": "CLANKERHOOD", "symbol": "CLAN", "decimals": 18, "decimalsResolved": true}
+"0xb5FCe2e414524C807F3758F729deef7aE343bBa3"	{"name": "Unifyapi", "symbol": "UNIFY", "decimals": 18, "decimalsResolved": true}
+"0xa400A49620bd82f501D188F3DdAdB2b23f4FEba3"	{"name": "platypus in hood", "symbol": "PIH", "decimals": 18, "decimalsResolved": true}
+"0x2A58122e55AC2cCde459FC493D1b18d2B93a9Ba3"	{"name": "Inferium", "symbol": "INFER", "decimals": 18, "decimalsResolved": true}
+"0xb3e0457Cd7C31f19C003116465c087f71D0dfBa3"	{"name": "Robin Hood", "symbol": "FOX", "decimals": 18, "decimalsResolved": true}
+"0xBF40811c52b6D5ac93253f21c9c9c45EfC5c9BA3"	{"name": "Binnet Agent", "symbol": "Binnet", "decimals": 18, "decimalsResolved": true}
+"0x495E28daAA67c0acAD6B569d7619752dF1aA7ba3"	{"name": "CashCat In Hood", "symbol": "COOD", "decimals": 18, "decimalsResolved": true}
+"0xf7D19CB24360d77eeA4Eae93e8aEefb113bC9bA3"	{"name": "Robin Hood", "symbol": "FOX", "decimals": 18, "decimalsResolved": true}
+"0x5BA9A61370144c6b6f0e9B45fD5BD1Dc35258bA3"	{"name": "HOOD", "symbol": "HOOD", "decimals": 18, "decimalsResolved": true}
+"0x63032345A45B9724727C6261227203064742fBa3"	{"name": "HOOD", "symbol": "HOOD", "decimals": 18, "decimalsResolved": true}
+"0x0C2fb9bE3bA9160c01cC8e07aE68DcEC10d62Ba3"	{"name": "Aider Ai", "symbol": "Aider", "decimals": 18, "decimalsResolved": true}
+"0x58a0b4dB5DE9bB44D9b6CeB85A6EB16c385fBBa3"	{"name": "niko", "symbol": "NIKO", "decimals": 18, "decimalsResolved": true}
+"0x5E3fa684208295e776887677b8A26B8d489D5bA3"	{"name": "HoodPot", "symbol": "Hoodpot", "decimals": 18, "decimalsResolved": true}
+"0x7a3B8938B7f2F78e82d0412bCF3B307DaD2E9ba3"	{"name": "CLANKERHOOD COIN", "symbol": "CLANKERHOOD", "decimals": 18, "decimalsResolved": true}
+"0x1CDA5e837B073EdDC1997A9d0347C0E90A6DBba3"	{"name": "Hobinrood", "symbol": "HOBO", "decimals": 18, "decimalsResolved": true}
+"0x45c3BabC7B7D8E42303C76Ffc269da9D13730Ba3"	{"name": "AgenticFI", "symbol": "AFI", "decimals": 18, "decimalsResolved": true}
+"0x5618d0AcE47BD79e30EA3CB20A2fB3A3588F9bA3"	{"name": "CLANKERHOOD", "symbol": "CLANKERHOOD", "decimals": 18, "decimalsResolved": true}
+"0x451945E2DA729eDcd54344B932D65c286f254BA3"	{"name": "CLANKERHOOD", "symbol": "CLANKERHOOD", "decimals": 18, "decimalsResolved": true}
+"0xf2E49cBdAB233046Ba642cD6bf2Fa9e828873bA3"	{"name": "CLANKERHOOD", "symbol": "CLANKERHOOD", "decimals": 18, "decimalsResolved": true}
+"0x91Af2D4013C0B99B30d144d74a5cCd563331bBA3"	{"name": "LobbyFinance", "symbol": "LOBBYFI", "decimals": 18, "decimalsResolved": true}
+"0xfAa912D3Ba27cD545B429700Ce09cCb7DceBFba3"	{"name": "Clanker On Robinhood", "symbol": "CLANKHOOD", "decimals": 18, "decimalsResolved": true}
+"0xA968865BBC15B241C86093C7612ddf04a0d89Ba3"	{"name": "Major Robin", "symbol": "Trumphood", "decimals": 18, "decimalsResolved": true}
+"0x9B3E8117Dc0D702d470fe4823b9ea4b150472ba3"	{"name": "LobbyFinance", "symbol": "LOBBYFI", "decimals": 18, "decimalsResolved": true}
+"0xCC0D0529865126cB7A449bC634CD4fA9592a2BA3"	{"name": "Bankrhood", "symbol": "BANKRHOOD", "decimals": 18, "decimalsResolved": true}
+"0xF9dc06273a50BE3910d8AB563268aAE66cdeABa3"	{"name": "HeimHood", "symbol": "HEIMHOOD", "decimals": 18, "decimalsResolved": true}
+"0x829025BB51a0dD06295E0b9264A3e994471A0BA3"	{"name": "PINO", "symbol": "PINO", "decimals": 18, "decimalsResolved": true}
+"0x86555A36aDb59B9546cd81668e8EB4B1068F9bA3"	{"name": "Clankerhood Token", "symbol": "CLANKERHOOD", "decimals": 18, "decimalsResolved": true}
+"0x76c86dE7F661b249be7253f701d5AD1753177BA3"	{"name": "Clankerhood Token", "symbol": "CLANKERHOOD", "decimals": 18, "decimalsResolved": true}
+"0xFF547e9E29b0Db88bCA9c1d96B81f89C7e46fba3"	{"name": "Hood6900", "symbol": "Hood6900", "decimals": 18, "decimalsResolved": true}
+"0xccda3c9Ff71cF04862E20C4CFc502364ECaDEBA3"	{"name": "RobinDaHood", "symbol": "RDH", "decimals": 18, "decimalsResolved": true}
+"0x48F59eb7e1CBE1CFf5FE43CDeCa2a45CE6FefBA3"	{"name": "BunnyOs", "symbol": "Bunny", "decimals": 18, "decimalsResolved": true}
+"0x34365B948a266bb2F003f0821020d911647EaBa3"	{"name": "WolfHood", "symbol": "WOLF", "decimals": 18, "decimalsResolved": true}
+"0x60eee42DEb4764982253c7Fb5922BDf44ba73BA3"	{"name": "Banker In Hoodie", "symbol": "BIH", "decimals": 18, "decimalsResolved": true}
+"0xb0A29bFE2417214488667e908cE535fdE2B54BA3"	{"name": "codev", "symbol": "CODEV", "decimals": 18, "decimalsResolved": true}
+"0x6Eb7F2f8749Cef9a7BC1437A657d30e46d73FBa3"	{"name": "Real Alpha Token", "symbol": "RAT", "decimals": 18, "decimalsResolved": true}
+"0x85eE197861dB4A24421d3a4DE766Df9C1a257bA3"	{"name": "Neighborhood", "symbol": "NBRHOOD", "decimals": 18, "decimalsResolved": true}
+"0x9185A2248Ac11c32fAc0185c95faC90C2fc62bA3"	{"name": "BANKRHOOD", "symbol": "BANK", "decimals": 18, "decimalsResolved": true}
+"0xAC61C6b59a28f3d30b21f2Be3a0B12ef04f17BA3"	{"name": "ClawHood", "symbol": "ClawHood", "decimals": 18, "decimalsResolved": true}
+"0x9eE837f33AC072bE71e52d7C1c840BC6eA417ba3"	{"name": "MOLT HOOD", "symbol": "MOLTHOOD", "decimals": 18, "decimalsResolved": true}
+"0x7dcd1e7c978e73ffe5b9E4F961116F4d20b42bA3"	{"name": "Launch Hood", "symbol": "Launchood", "decimals": 18, "decimalsResolved": true}
+"0x24719263827C38696067F638778D0F4ABf615223"	{"name": "Feather", "symbol": "FEATHER", "decimals": 18, "decimalsResolved": true}
+"0x57e46bc45d118BCfd2B7f751e413F6309F3beba3"	{"name": "HOOD AI", "symbol": "HOODAI", "decimals": 18, "decimalsResolved": true}
+"0x31d890E71613bbD7AD21a316677BFF6C8E912Ba3"	{"name": "Agent Hood", "symbol": "AgentHood", "decimals": 18, "decimalsResolved": true}
+"0x61efd4037C0Bd4f57B677f3f6a2625C596BBABA3"	{"name": "synthocore", "symbol": "SYNCHOOD", "decimals": 18, "decimalsResolved": true}
+"0x81d1011f6D37Dc5b5e324003e8b293bb82F81bA3"	{"name": "Seedverse", "symbol": "SEED", "decimals": 18, "decimalsResolved": true}
+"0x322A4dC4f40B14a17634c815328626A325B0fBA3"	{"name": "CLANKERHOOD", "symbol": "CLANKERHOOD", "decimals": 18, "decimalsResolved": true}
+"0x44a5F87A46611Cb6BE5B88e70A32F90888632bA3"	{"name": "TryRelaiHOOD", "symbol": "RELAIHOOD", "decimals": 18, "decimalsResolved": true}
+"0xa8435Ba8c9a998021488Ed14348aA44C2cA0CbA3"	{"name": "robinhatch", "symbol": "hatch", "decimals": 18, "decimalsResolved": true}
+"0xD5E726fe1E7580bbd795955a3aE381032e3DCbA3"	{"name": "robinhatch", "symbol": "hatch", "decimals": 18, "decimalsResolved": true}
+"0xc814B1616016BD179d763Fa431BF8c8578420Ba3"	{"name": "Mintly", "symbol": "MINTLY", "decimals": 18, "decimalsResolved": true}
+"0x35b1cC3042DD2DceA5018bd8d36A39dD2fFabbA3"	{"name": "The Next 100x Memecoin on HOOD", "symbol": "TN100x", "decimals": 18, "decimalsResolved": true}
+"0x39BEe75D492D73C9b047D42b665d1B3dd8A8a5bb"	{"name": "Neighborhood", "symbol": "NBRHOOD", "decimals": 18, "decimalsResolved": true}
+"0x25B826840FC5EabaCdEC0d483bAB16178bc46Ba3"	{"name": "DAMN", "symbol": "DAMN", "decimals": 18, "decimalsResolved": true}
+"0xbDF810AcE1f167Cece3879e14502f7B8D23ddBA3"	{"name": "CLANKERHOOD", "symbol": "CLANKHOOD", "decimals": 18, "decimalsResolved": true}
+"0xD28F043E000d6a02930e5dd5a75979D69AC41bA3"	{"name": "CLANKERHOOD", "symbol": "CLANKHOOD", "decimals": 18, "decimalsResolved": true}
+"0x6FE46E5c6E99F24c1e05EA1B93cDa63d90353Ba3"	{"name": "CLANKERHOOD", "symbol": "CLANKHOOD", "decimals": 18, "decimalsResolved": true}
+"0x4aE9aD18BDb38E2c086BDbff72d9A542F6a7bba3"	{"name": "The Wolf Hood", "symbol": "WOLF", "decimals": 18, "decimalsResolved": true}
+"0xD577E6a25b6AD557d08Ec1DE82a462A2BB3F2BA3"	{"name": "Bankrhoody", "symbol": "Bankrhoody", "decimals": 18, "decimalsResolved": true}
+"0x8deE63dE5973Cf4A8a0Cf2c633bD331567537ba3"	{"name": "Fishing", "symbol": "Fish", "decimals": 18, "decimalsResolved": true}
+"0xD6E4856d1Ae84d85Afaef8D5F301128a4CA06BA3"	{"name": "The Nuke Bull", "symbol": "NUKE", "decimals": 18, "decimalsResolved": true}
+"0x2C2C1DEA5321B706984464d1282D1aa13D130Ba3"	{"name": "Happy Fish", "symbol": "HISH", "decimals": 18, "decimalsResolved": true}
+"0xd20c2C1Bd45ce270CEeFf4f5f6178dB8D379FBa3"	{"name": "BEPPO DEV", "symbol": "BEPPO", "decimals": 18, "decimalsResolved": true}
+"0x3D31e3AfA84DC3CE3c3677dAa911a0992B6dABa3"	{"name": "PEPE RARE COIN", "symbol": "PEPECOIN", "decimals": 18, "decimalsResolved": true}
+"0xC9F92C1Adea183DdC263D328dCaC66f50a186BA3"	{"name": "BEPPO DEV", "symbol": "BEPPO", "decimals": 18, "decimalsResolved": true}
+"0x132D7e002284042398E5CeC2466c0F01A6423bA3"	{"name": "CONVT APP", "symbol": "CONVT", "decimals": 18, "decimalsResolved": true}
+"0x72F31833bc0da115226A17f60A64621E090aCBA3"	{"name": "Bow Hood", "symbol": "$BowHood", "decimals": 18, "decimalsResolved": true}
+"0x9906033616b69d42dc88Ec44e171213750604bA3"	{"name": "ROB", "symbol": "ROB", "decimals": 18, "decimalsResolved": true}
+"0xAa12c60177f9Ca9ed7EEeD1b0D29229fE6288BA3"	{"name": "Bow Hood", "symbol": "$BowHood", "decimals": 18, "decimalsResolved": true}
+"0xCE451E6D5Ab75b342a0A531Ce68Aa3c771246269"	{"name": "Bankr", "symbol": "BANKR", "decimals": 18, "decimalsResolved": true}
+"0xcB4C3A50936d1c3B575ca0518608f66E5b047BA3"	{"name": "Bow Hood", "symbol": "$BowHood", "decimals": 18, "decimalsResolved": true}
+"0x1e77Aa9DdaF268bba2936ba9B92D328a68fD6Ba3"	{"name": "Bow", "symbol": "$Bow", "decimals": 18, "decimalsResolved": true}
+"0xE447f01266CA9235aeacC64579fF8F60ed04bba3"	{"name": "Honey Badger", "symbol": "BADGER", "decimals": 18, "decimalsResolved": true}
+"0x4c6B90Edfef59E01B622265AAf9E61897b3f0bA3"	{"name": "The world is flat", "symbol": "FLAT", "decimals": 18, "decimalsResolved": true}
+"0x5433FB8553A7ce6E0Eb403BDD8512f0a04c17Ba3"	{"name": "ANTSEM", "symbol": "ANTSEM", "decimals": 18, "decimalsResolved": true}
+"0x1ecca0f9b501C7eD18AE5Bc11CAce3512383fba3"	{"name": "Hooders", "symbol": "Hooders", "decimals": 18, "decimalsResolved": true}
+"0x2eE12cF0Fd9971630f343be711e8Fd5E3AFE3bA3"	{"name": "The World is Flat", "symbol": "TWF", "decimals": 18, "decimalsResolved": true}
+"0xB8A14A68CD10D447b304DAd777012e1F7c45DbA3"	{"name": "HOOD BOW", "symbol": "HOODBOW", "decimals": 18, "decimalsResolved": true}
+"0x6167c09947F2bC47122E016A0Fc28b6321Cf3ba3"	{"name": "Arrow Finance", "symbol": "ARROW", "decimals": 18, "decimalsResolved": true}
+"0x4b107Ffb8B0cf1F7B4305426C6D699baCa5AdbA3"	{"name": "RwaSentinel", "symbol": "SENTINEL", "decimals": 18, "decimalsResolved": true}
+"0xCb35d6d59bB658457380CA705a8Cc1Cda6C42BA3"	{"name": "Sherwood Forest", "symbol": "FOREST", "decimals": 18, "decimalsResolved": true}
+"0x10F3CecC4841FD2E919c98D3ba65D1cB0B741ba3"	{"name": "Neightborhood", "symbol": "NBRHOOD", "decimals": 18, "decimalsResolved": true}
+"0x36A310BbC62fFAa826bbdF16cBE6AF6DC3622BA3"	{"name": "dooh", "symbol": "DOOH", "decimals": 18, "decimalsResolved": true}
+"0x8f8dAa041C127c627aEE5153fb45E2728fbdCBA3"	{"name": "AetherLink", "symbol": "AELK", "decimals": 18, "decimalsResolved": true}
+"0x60eE0D5DBA1e3Bcb4B1b1EF531B7282e14245ba3"	{"name": "LobbyFinance", "symbol": "LOBBYFI", "decimals": 18, "decimalsResolved": true}
+"0xBc3ccbfd7e2525f1c4660D8AE3F6614691a4cBA3"	{"name": "FeathrCoin", "symbol": "FEATHR", "decimals": 18, "decimalsResolved": true}
+"0xe121d9Fe6Aca15D6a7269F3213f07F58d52F0ba3"	{"name": "Astic Ai", "symbol": "ASTIC", "decimals": 18, "decimalsResolved": true}
+"0x5778964E39258E102E5bB4EDF78b4dE7819B4BA3"	{"name": "O!", "symbol": "0!", "decimals": 18, "decimalsResolved": true}
+"0xfcdCC710D02CD948C5C9e7f3986CfD2869c5BbA3"	{"name": "Tacit Finance", "symbol": "TacitFi", "decimals": 18, "decimalsResolved": true}
+"0xF49Aa3261C41188e37b73D8a3dc0fcBA23F74bA3"	{"name": "Arrow Finance", "symbol": "ARROW", "decimals": 18, "decimalsResolved": true}
+"0x80C8dad84aF1f6F895AF604d3b86864E62603Ba3"	{"name": "robinlaunch", "symbol": "ROBIN", "decimals": 18, "decimalsResolved": true}
+"0x9bfcca70173025c4219827F05975e3934Db9aba3"	{"name": "Test", "symbol": "TEST", "decimals": 18, "decimalsResolved": true}
+"0x42f14aC7936360342364e6eB40B0eDf8515d6BA3"	{"name": "Roben Hood", "symbol": "Hood", "decimals": 18, "decimalsResolved": true}
+"0xad530E91bE1e39b6DD1b95B5dCD0Bc50dD07bBa3"	{"name": "Roben hud", "symbol": "Hud", "decimals": 18, "decimalsResolved": true}
+"0xA4f041dB0F1595221A188617167342dB14019ba3"	{"name": "Grove Finance", "symbol": "GROVE", "decimals": 18, "decimalsResolved": true}
+"0x8398E4B5E1B50853A850ab704FddAA3085014bA3"	{"name": "FORGEX", "symbol": "FORGE", "decimals": 18, "decimalsResolved": true}
+"0xBAc3404c1D73856F9BC00910846426D39B82eba3"	{"name": "FROGHOOD", "symbol": "FROGHOOD", "decimals": 18, "decimalsResolved": true}
+"0xa22CBe74f0464d8dE387932db7B32B52289A6Ba3"	{"name": "Hoodtrade", "symbol": "Hoodtrade", "decimals": 18, "decimalsResolved": true}
+"0x608ce68d5a90FE8E25212eA5a87cF112EC9232e1"	{"name": "The Black Hood", "symbol": "ONEHOOD", "decimals": 18, "decimalsResolved": true}
+"0x8e5791E5238857E3eAd22b958e0f40129642E8Fb"	{"name": "Lox the Fox", "symbol": "LOX", "decimals": 18, "decimalsResolved": true}
+"0xe81DC008231035C91F09633c541394B9DdF53673"	{"name": "VORTANO", "symbol": "VRTN", "decimals": 18, "decimalsResolved": true}
+"0x55F0F03a1152E4Db8b1fD74A0ECB1878C1a2A6C3"	{"name": "罗宾汉", "symbol": "罗宾汉", "decimals": 18, "decimalsResolved": true}
+"0xdD264328bF30f663921735fe1fFC0f2C2F785137"	{"name": "罗宾汉人生", "symbol": "罗宾汉人生", "decimals": 18, "decimalsResolved": true}
+"0x91B853180E9fFA6976A2d50D181A7c3d5C8979aA"	{"name": "TYGR", "symbol": "TYGR", "decimals": 18, "decimalsResolved": true}
+"0x84b7515081A7Ac5adc26179b77A8B18A8c6725C0"	{"name": "Mintly", "symbol": "MLY", "decimals": 18, "decimalsResolved": true}
+"0x253a5784f291E192AA00D57528369f697c8fC286"	{"name": "Hawk Intelligence Terminal", "symbol": "HAWK", "decimals": 18, "decimalsResolved": true}
+"0xef4bD57eeDAB6C0b7F67612BEDC15EF82Fc8f4aA"	{"name": "Greenwood", "symbol": "WOOD", "decimals": 18, "decimalsResolved": true}
+"0x0aE3ADEE76A1eB89e5C4aC9b54BCb0B715135ba3"	{"name": "Hood Catalyst", "symbol": "HOODCAT", "decimals": 18, "decimalsResolved": true}
+"0x00C0dDBeA5342a15184152A7764999D70f8eabA3"	{"name": "Neightborhood", "symbol": "NEIG", "decimals": 18, "decimalsResolved": true}
+"0x02271b822D52642990530185c3A8732429245ba3"	{"name": "LobbyFinance", "symbol": "LOBBYFI", "decimals": 18, "decimalsResolved": true}
+"0x844f77d5228c1beD4ED294E1F6c6ff4da692bba3"	{"name": "Clawdvivor", "symbol": "VIVOR", "decimals": 18, "decimalsResolved": true}
+"0x13a8E1922E1023Ea79576442b413CC4dDFC0dBa3"	{"name": "RwaSentinel", "symbol": "SENTINEL", "decimals": 18, "decimalsResolved": true}
+"0x9a780C270d8eA2C3011dC9899DCFbaa438b10bA3"	{"name": "InternetCourt", "symbol": "ICT", "decimals": 18, "decimalsResolved": true}
+"0x558f858836d438ef15eE076ac036459069e2eBa3"	{"name": "Sonichood", "symbol": "SONI", "decimals": 18, "decimalsResolved": true}
+"0x0ef49ae2b1EbAba134C84fC9bb9fF283dDe97BA3"	{"name": "Clam Capital", "symbol": "CLAM", "decimals": 18, "decimalsResolved": true}
+"0xdFe0784E49a6B3A0B93ffDc2Ee3fD50AAEE83ba3"	{"name": "Hood Trade", "symbol": "HT", "decimals": 18, "decimalsResolved": true}
+"0x4F251e49570A91d01B92C1Ccd9cCd822629c4bA3"	{"name": "HOODLUM", "symbol": "HLUM", "decimals": 18, "decimalsResolved": true}
+"0x2958c2Ca1614631a08C43Ab7D108E2cAa1678Ba3"	{"name": "Bitstamp", "symbol": "Bitstamp", "decimals": 18, "decimalsResolved": true}
+"0x4a7C545122497dB4F6aF728460C435576Ba25BA3"	{"name": "Robin", "symbol": "ROBIN", "decimals": 18, "decimalsResolved": true}
+"0xe8216F57011983128135fEA5542198D7aB386bA3"	{"name": "Mr BELL", "symbol": "BELL", "decimals": 18, "decimalsResolved": true}
+"0xD4e73BFA5DCb145f243877E2a9bfB423295f0bA3"	{"name": "Bow Hood AI", "symbol": "$BoxwoodAi", "decimals": 18, "decimalsResolved": true}
+"0x0C4d606C15710ea48dC4AD63057548876fa4aBa3"	{"name": "STONKS", "symbol": "STONKS", "decimals": 18, "decimalsResolved": true}
+"0x35f59FF64d0e6577d10074Ef206745a2BAF88bA3"	{"name": "Hood Trade", "symbol": "HOODTRADE", "decimals": 18, "decimalsResolved": true}
+"0x4c6a0be18132270297EF4B9ad879Ceb2B5707bA3"	{"name": "B20 Launcher", "symbol": "B20L", "decimals": 18, "decimalsResolved": true}
+"0x516eA93413B41957DdF767fA1137a41f7e7ddba3"	{"name": "Under The Hood", "symbol": "UTH", "decimals": 18, "decimalsResolved": true}
+"0xd2dC9a81F1d65B47240a7B4581dD989d65203ba3"	{"name": "rhtest", "symbol": "RHTEST", "decimals": 18, "decimalsResolved": true}
+"0x6219b59bfa4bcE3a3D13AE0e2264C116eC549ba3"	{"name": "ANSEM", "symbol": "ANSEM", "decimals": 18, "decimalsResolved": true}
+"0xfD3A9Fb19967cb69cfa1e7B825F001c020e59bA3"	{"name": "rhtest2", "symbol": "RHTEST2", "decimals": 18, "decimalsResolved": true}
+"0x76DF514e1CCf11144Be7988215C051A96c8ccBa3"	{"name": "robinlaunch", "symbol": "ROBIN", "decimals": 18, "decimalsResolved": true}
+"0xc77A22340fC3e171e3Ad8Ef07371F6d84E894bA3"	{"name": "TAPE", "symbol": "TAPE", "decimals": 18, "decimalsResolved": true}
+"0xe02C6c6d5cDfcB198A71b10CfB1771E09bF0BBa3"	{"name": "PrimeHod", "symbol": "PRIME", "decimals": 18, "decimalsResolved": true}
+"0x749f8c1CE5C8513C39cE7cBfCd0853C61aF18ba3"	{"name": "HoodTrade", "symbol": "HT", "decimals": 18, "decimalsResolved": true}
+"0x52137c8c891a45e00CB6B54EAA6c78d4A7f73ba3"	{"name": "fitmoney", "symbol": "FITMONEY", "decimals": 18, "decimalsResolved": true}
+"0xab29b135bde8c52B1daBB3F5e9035ECBBa512Ba3"	{"name": "fitmoney", "symbol": "FITMONEY", "decimals": 18, "decimalsResolved": true}
+"0x381FCfF0E4769b18357f5B5D99F0a7C9c74B8ba3"	{"name": "Bow Hood NYC", "symbol": "BOWHOODNYC", "decimals": 18, "decimalsResolved": true}
+"0xFb0946D08D5bfADD8d28856124fd6521eF63AbA3"	{"name": "Quill", "symbol": "QUILL", "decimals": 18, "decimalsResolved": true}
+"0x16b2A083F6f3d275D46B9CBD20bbbe8452cF7bA3"	{"name": "FeathrCoin", "symbol": "FEATHR", "decimals": 18, "decimalsResolved": true}
+"0x19696231C87599b01694645FdDC217c5f4D24bA3"	{"name": "PINO", "symbol": "PINO", "decimals": 18, "decimalsResolved": true}
+"0x60EEfdAc97399C66F2e8AB3B30c172eD5D622ba3"	{"name": "Feather Cap", "symbol": "$FeatherCap", "decimals": 18, "decimalsResolved": true}
+"0x1E5f33a04DA437df22fcC054e62C39fb48c7ABa3"	{"name": "Feather Cap", "symbol": "$FeatherCap", "decimals": 18, "decimalsResolved": true}
+"0x25adB3ce11a8aED3b8089236d7Fe7847A14bdba3"	{"name": "FeathrCoin", "symbol": "FEAT", "decimals": 18, "decimalsResolved": true}
+"0x159665db89933F83Da9E8C5f650dF01998B5BBa3"	{"name": "Sonichood", "symbol": "SONI", "decimals": 18, "decimalsResolved": true}
+"0xe2969e43901087773BB68b92B0416e249F25EBA3"	{"name": "FeathrCoin", "symbol": "FEAT", "decimals": 18, "decimalsResolved": true}
+"0x23Ebdc4286146157D21CeD5e9b1769e92aDAFBA3"	{"name": "Berry Finance", "symbol": "BERR", "decimals": 18, "decimalsResolved": true}
+"0xE3C1897f989759E4cD19752b62F049a635257Ba3"	{"name": "Con Claw", "symbol": "ConClaw", "decimals": 18, "decimalsResolved": true}
+"0x770D291EFcD34ac84A17dbf80aFb8220f60f7ba3"	{"name": "Con Claw", "symbol": "$ConClaw", "decimals": 18, "decimalsResolved": true}
+"0xE62CE44DFF6Ed91bb7c421bC2A19b6d07b6D4ba3"	{"name": "ZORAI", "symbol": "ZORAI", "decimals": 18, "decimalsResolved": true}
+"0xeFbfe017308db94264053645A5A3bac6FC467751"	{"name": "Robin Pig", "symbol": "ROBINPIG", "decimals": 18, "decimalsResolved": true}
+"0xF37363D23D43E08CF3EC86d3bdA88fF6a9A3bbA3"	{"name": "Con Claw", "symbol": "ConClaw", "decimals": 18, "decimalsResolved": true}
+"0x9f228A9cfF39FeFf306410ee0b8D1eBE4A488Ba3"	{"name": "Clankerhood", "symbol": "CLANKHOOD", "decimals": 18, "decimalsResolved": true}
+"0x79877A0B25A4d7FAbd86836dBCEA4Dd9f898BBa3"	{"name": "PULT", "symbol": "PULT", "decimals": 18, "decimalsResolved": true}
+"0x4422Af19F692e811ea0624C61F422F9A5be48bA3"	{"name": "Unsiloed AI", "symbol": "UNSILOED", "decimals": 18, "decimalsResolved": true}
+"0x7e34920F104081BAE360AD90bCB5272a62129ba3"	{"name": "BANKRHOOD", "symbol": "BANK", "decimals": 18, "decimalsResolved": true}
+"0xbE157f65D998BB933e1BaeaB2427a74B32feABa3"	{"name": "BROTHERHOOD", "symbol": "BRO", "decimals": 18, "decimalsResolved": true}
+"0xCA3551e225b5aBe0f398565c5BcE39E68fDeEBa3"	{"name": "Bankrhood", "symbol": "BANKRHOOD", "decimals": 18, "decimalsResolved": true}
+"0xCe74ff2583362161d72070F0E9cfefA96E7D3bA3"	{"name": "the heroes", "symbol": "ROBIN", "decimals": 18, "decimalsResolved": true}
+"0x1Ce56db5c13421186fCD6Ae11c758a52364B5Ba3"	{"name": "capyhood", "symbol": "CAPYHOOD", "decimals": 18, "decimalsResolved": true}
+"0x242cdcdA4613f1b77439f40bb6D08F9A42457ba3"	{"name": "PULT", "symbol": "PULT", "decimals": 18, "decimalsResolved": true}
+"0x76d305c6967379b11723e3773A4bEC2e1965dbA3"	{"name": "PlayCora", "symbol": "CORA", "decimals": 18, "decimalsResolved": true}
+"0xC0B2b024A1B03cAB773E1a3ECa5898A15BE34bA3"	{"name": "Nous Angels", "symbol": "Angels", "decimals": 18, "decimalsResolved": true}
+"0x8450eE47722965eB1f23C94114953ac5EADC5ba3"	{"name": "PINO", "symbol": "PINO", "decimals": 18, "decimalsResolved": true}
+"0xDf6c1060e7cf38c84A088fcb3A647f325fAe6ba3"	{"name": "BIGOD", "symbol": "BIGOD", "decimals": 18, "decimalsResolved": true}
+"0xf94dD625257323057EcA132F2dF2606b17993bA3"	{"name": "dog wif hat", "symbol": "DWH", "decimals": 18, "decimalsResolved": true}
+"0x65f06Fdd99643F25762A6E2DC6CBfc0AF8ba7Ba3"	{"name": "Debot Terminal", "symbol": "DB", "decimals": 18, "decimalsResolved": true}
+"0xe1dB993757f728b9bbf1FEd919217B8f904D7BA3"	{"name": "PINO", "symbol": "PINO", "decimals": 18, "decimalsResolved": true}
+"0xCbEE8738Aa19eb1703786a4B13B9C0195A6CCba3"	{"name": "robinlaunch", "symbol": "ROBIN", "decimals": 18, "decimalsResolved": true}
+"0x8db06c1D8bEA700c9881E08e0d2e59611ec0c0De"	{"name": "tesss", "symbol": "tesss", "decimals": 18, "decimalsResolved": true}
+"0x8c951349889241D33859cCC5f739EFfD45A3c0DE"	{"name": "LINI", "symbol": "LINI", "decimals": 18, "decimalsResolved": true}
+"0x7b81BD09A14F030363E2c3f45aa7e00e334f20cc"	{"name": "Green Room", "symbol": "ROOM", "decimals": 18, "decimalsResolved": true}
+"0xA7ED74f428274bc13c67C2e3F233d26df3746673"	{"name": "Smily Bet", "symbol": "SmilyBet", "decimals": 18, "decimalsResolved": true}
+"0x250dcD8c49d05Dbb0dC266A5DDbFB263C7e58D80"	{"name": "Trump Accounts", "symbol": "530A", "decimals": 18, "decimalsResolved": true}
+"0x1Bf8FD300292398DFbf3Fc37E38Cf909846583FC"	{"name": "cat in vest", "symbol": "invest", "decimals": 18, "decimalsResolved": true}
+"0xB9779d610bbCA688E99ABFeb07F0C975a1d63D28"	{"name": "Solvio Agent", "symbol": "SOLVIO", "decimals": 18, "decimalsResolved": true}
+"0xEA789dfc450CeF176252f8Dc17dE8C48232314bE"	{"name": "GUH", "symbol": "GUH", "decimals": 18, "decimalsResolved": true}
+"0x0133B0E7A3cD0Bc01232Cdf42c26AD71Fb314Ba3"	{"name": "ROBINCAT", "symbol": "ROBINCAT", "decimals": 18, "decimalsResolved": true}
+"0x4a65ECab2d18afadc50ddb9Fc8b35bdD06B05BA3"	{"name": "megahood", "symbol": "MEGAHOOD", "decimals": 18, "decimalsResolved": true}
+"0x2b1a839ba8675D9876B12ADe439085A8732b9Ba3"	{"name": "tech coin", "symbol": "TECH", "decimals": 18, "decimalsResolved": true}
+"0xdD8700C5235220a584162e7943B0Bf9846416773"	{"name": "Tech", "symbol": "TECH", "decimals": 18, "decimalsResolved": true}
+"0x3877B054bfD52a062Ac98762615FAa224667dBa3"	{"name": "the green bull", "symbol": "vlad", "decimals": 18, "decimalsResolved": true}
+"0xE165cE463e6C4E80D3c9f6c02eA1566D6f76EbA3"	{"name": "$CRM $HOOD $COIN $BASE http://ABANA.co non-USD http://UnicornsMap.com $UM-Radar", "symbol": "CHCB", "decimals": 18, "decimalsResolved": true}
+"0x3d669a957368f13E157835FBa358338fe0aa4Ba3"	{"name": "Shareewood", "symbol": "SHAREEWOOD", "decimals": 18, "decimalsResolved": true}
+"0xf7b4e7d4ee24c389c8F8A200409F3D9148B88BA3"	{"name": "QUANT", "symbol": "QUANT", "decimals": 18, "decimalsResolved": true}
+"0x8d7c2d53C5a16B86ED208053066Ca0220bBDdBa3"	{"name": "BUUGS", "symbol": "BUUG", "decimals": 18, "decimalsResolved": true}
+"0xE2B1D3298bA325CE266f7692629A83A7f0813BA3"	{"name": "Sheerwood", "symbol": "SHEERWOOD", "decimals": 18, "decimalsResolved": true}
+"0xf802B1153adf8f84ac65D501FD1A053c3646CBA3"	{"name": "OK, COMPUTER", "symbol": "OKCO", "decimals": 18, "decimalsResolved": true}
+"0xC8A7F571Cc38D95a5775C2C86838422D8Da73Ba3"	{"name": "YITNOHOOD", "symbol": "YITNO", "decimals": 18, "decimalsResolved": true}
+"0x404191D8ED831df9f16cA2f3bF2C95A5fB061BA3"	{"name": "YITNOHOOD", "symbol": "YITNO", "decimals": 18, "decimalsResolved": true}
+"0x2B168D5DA1CC956Dfb873088059d1D1BF9036Ba3"	{"name": "Pino", "symbol": "PINO", "decimals": 18, "decimalsResolved": true}
+"0x89c9Ca6a3EE1cf4e455A984EEAd09EfD6E82ebA3"	{"name": "ontohood", "symbol": "ONTO", "decimals": 18, "decimalsResolved": true}
+"0x9C0985D09c90f95d75153dD70880D4DC4941eBA3"	{"name": "Ticker", "symbol": "Ticker", "decimals": 18, "decimalsResolved": true}
+"0x890Cd7A8b83717033F37B64FD01bB8419354DBa3"	{"name": "Sheriff", "symbol": "SHERIFF", "decimals": 18, "decimalsResolved": true}
+"0xdA69FB8f238E26E82009707300A813a93b6D7bA3"	{"name": "Robin You Hoes", "symbol": "RYH", "decimals": 18, "decimalsResolved": true}
+"0xA323b806929f36c86be5554B4902A94001761ba3"	{"name": "Baby Bankr", "symbol": "BBNKR", "decimals": 18, "decimalsResolved": true}
+"0x3D39ce51b00702fEe3312De1aC175B75a6c3FBA3"	{"name": "Paradigm", "symbol": "Paradigm", "decimals": 18, "decimalsResolved": true}
+"0x47825DcfE1721689E1F772b85935C36C76E1EbA3"	{"name": "HOODMER AGENT", "symbol": "HOODMER", "decimals": 18, "decimalsResolved": true}
+"0x385C6783A2c0AD2a496EB54d951564304b82Dba3"	{"name": "ROBINR", "symbol": "ROBINR", "decimals": 18, "decimalsResolved": true}
+"0xC72830CA3d5C3d52bDC27D205e9ea03a1B132BA3"	{"name": "CLANKERHOOD", "symbol": "CLAN", "decimals": 18, "decimalsResolved": true}
+"0xa76f4A6B7BC0F29927B47231343A154984A5BBa3"	{"name": "BorinHood", "symbol": "BORI", "decimals": 18, "decimalsResolved": true}
+"0x6517701D21171E9a721DfD6CDa34b9eC8dfB9BA3"	{"name": "Agent Hobinhood", "symbol": "AHOOD", "decimals": 18, "decimalsResolved": true}
+"0x2D4979dAC232De5a04e40d5080bE3d5e9e3Cbba3"	{"name": "Bitcoin Pizza", "symbol": "PIZZA", "decimals": 18, "decimalsResolved": true}
+"0x30C7F4A209C0886D986a4312Fc3C6209690C0ba3"	{"name": "THE WOLF HOOD", "symbol": "WOLF", "decimals": 18, "decimalsResolved": true}
+"0xcec2Ae85488c5ED0f53f8E75084d7A9d0f3F3bA3"	{"name": "Near Protocol", "symbol": "NEAR", "decimals": 18, "decimalsResolved": true}
+"0x809cf1940EFA34779a91A278D21BdC536D240Ba3"	{"name": "BlinkCashX", "symbol": "BLINK", "decimals": 18, "decimalsResolved": true}
+"0x84A584Fc392e9e4Be5601c64123B648741eB6Ba3"	{"name": "THE WOLF HOOD", "symbol": "WOLF", "decimals": 18, "decimalsResolved": true}
+"0x51d14b8581810a0A4508299555A303C424bADba3"	{"name": "MEGAHOOD", "symbol": "MEGAHOOD", "decimals": 18, "decimalsResolved": true}
+"0xe3c75066D7a19eaf7038CFd6E2249671E9f57ba3"	{"name": "Clanker", "symbol": "CLANKERHOOD", "decimals": 18, "decimalsResolved": true}
+"0x1630F6958469063D0F409e4a4a2577c904E04ba3"	{"name": "Unihood", "symbol": "UNIHOOD", "decimals": 18, "decimalsResolved": true}
+"0x2b745dCd8dE1f41FA767b2661367cf35E5b0FBA3"	{"name": "SeedverseHood", "symbol": "VERSEHOOD", "decimals": 18, "decimalsResolved": true}
+"0xb289B2bc56807e6fb125c4D2E82c02757A9C7BA3"	{"name": "ORCHAD", "symbol": "ORCHAD", "decimals": 18, "decimalsResolved": true}
+"0xAD88ae2c7A3275051f72ec185c57bd36C05D6bA3"	{"name": "HOODTRADE", "symbol": "HOODTRADE", "decimals": 18, "decimalsResolved": true}
+"0x3Db1d2b4F99cC189713183a4Ae4cbee2FCDD7bA3"	{"name": "r/datadao", "symbol": "RDAT", "decimals": 18, "decimalsResolved": true}
+"0x1945149810bFa2e3D44d4D06cB013F3401CB6ba3"	{"name": "r/datadao", "symbol": "RDAT", "decimals": 18, "decimalsResolved": true}
+"0x71D577C0629253eB834bAEF46E7441B202861ba3"	{"name": "Hood-Rat", "symbol": "Hood-Rat", "decimals": 18, "decimalsResolved": true}
+"0x60b1Adaf89aA9c909Fcc6afD877Df1d215131ba3"	{"name": "Bow with Cat", "symbol": "BOWCAT", "decimals": 18, "decimalsResolved": true}
+"0x90460D4eF2941cF490Ccafa58955AfBd09959Ba3"	{"name": "Bow with Cat", "symbol": "BOWCAT", "decimals": 18, "decimalsResolved": true}
+"0x2f9d34c9CBA2Fa654eC68ed96fB53c14B741eba3"	{"name": "ROBINCAT", "symbol": "ROBINCAT", "decimals": 18, "decimalsResolved": true}
+"0x74Ebe81f5c0FC704fA294f46020dec645f2fFBa3"	{"name": "EPIC", "symbol": "EPIC", "decimals": 18, "decimalsResolved": true}
+"0x5A398C87cb75Dc5887bC8cC4C347B6BAf77E1bA3"	{"name": "Shoes for deployer", "symbol": "SHOES", "decimals": 18, "decimalsResolved": true}
+"0x63594c0d52F4D2fC7722f41353dD0a5188c91bA3"	{"name": "ROBINBULL", "symbol": "ROBINBULL", "decimals": 18, "decimalsResolved": true}
+"0x65302D6D97623cf8d571352f3c0761F0592AaBA3"	{"name": "ROBINDOG", "symbol": "ROBINDOG", "decimals": 18, "decimalsResolved": true}
+"0x553558f2b5eFaB9169603c5Fbf6b891F64463BA3"	{"name": "Longbow", "symbol": "Longbow", "decimals": 18, "decimalsResolved": true}
+"0xa9735455c4D54Bf4A280C6d654187D3F34e01BA3"	{"name": "Hood Founder", "symbol": "Founder", "decimals": 18, "decimalsResolved": true}
+"0xb82e9405c279e6cc7BC3fa823C4e8645C31c0BA3"	{"name": "LONGBOW", "symbol": "LONGBOW", "decimals": 18, "decimalsResolved": true}
+"0x9221F8f87D7c7975C81De2CCcba7FF5a4Bd68ba3"	{"name": "ROBIDY", "symbol": "ROBIDY", "decimals": 18, "decimalsResolved": true}
+"0x19bEe2091C376C31AbD5618050b06F0189A43BA3"	{"name": "CBDC", "symbol": "CBDC", "decimals": 18, "decimalsResolved": true}
+"0xe0757eb4bc768393eEb6EDD35730A5dC88cc2bA3"	{"name": "Robinbull", "symbol": "ROBINBULL", "decimals": 18, "decimalsResolved": true}
+"0xa37374add84c626045cc265B923D66448E573ba3"	{"name": "Longbow", "symbol": "LONGBOW", "decimals": 18, "decimalsResolved": true}
+"0xE499eE2Ff9a609aC7Af52bF2533F7fAA870FEBA3"	{"name": "Loxley", "symbol": "LOXL", "decimals": 18, "decimalsResolved": true}
+"0x58C695a03fdA37c2242b05D0322E9629837DC0DE"	{"name": "LINI", "symbol": "LINI", "decimals": 18, "decimalsResolved": true}
+"0x6D497EBb99C5203f45C5c4b940be56493C93b8DD"	{"name": "gub in hood", "symbol": "GUB", "decimals": 18, "decimalsResolved": true}
+"0xD2f7506765A7af62F9eD836D638d014E7c2c157c"	{"name": "Smily", "symbol": "Smily", "decimals": 18, "decimalsResolved": true}
+"0x9f81aa76707f3D922c3bDe225Ea8a59627F2e8c7"	{"name": "Smily Ai", "symbol": "Smily Ai", "decimals": 18, "decimalsResolved": true}
+"0x76413Ea82044838103386EFefE2dad64D6863ba3"	{"name": "Will Scarlet", "symbol": "WILL", "decimals": 18, "decimalsResolved": true}
+"0x30926e112Fa83bA762Bbe1530176C61676755bA3"	{"name": "OrchadFi", "symbol": "ORCHAD", "decimals": 18, "decimalsResolved": true}
+"0x86bD328483e223e568270750dfa8e68e09df9Ba3"	{"name": "Autoboy", "symbol": "AUTOBOY", "decimals": 18, "decimalsResolved": true}
+"0x419Fa836C76be20292F229EDF5D49864cB49d09B"	{"name": "Cash Dog", "symbol": "CASHDOG", "decimals": 18, "decimalsResolved": true}
+"0x567a30C591fC782FDC16be1F8dc021ecdb7d95Cd"	{"name": "Quiver Launchpad", "symbol": "QUIVER", "decimals": 18, "decimalsResolved": true}
+"0x0d270b3A30D118945e630384D1AfAB07007D5784"	{"name": "hood", "symbol": "robin hood", "decimals": 18, "decimalsResolved": true}
+"0x09dfc77046457027f64905E55b8575c05513775B"	{"name": "hood", "symbol": "robin hood", "decimals": 18, "decimalsResolved": true}
+"0x7271660a31c7BA25C64E94498B742e1d52466386"	{"name": "hood", "symbol": "robin hood", "decimals": 18, "decimalsResolved": true}
