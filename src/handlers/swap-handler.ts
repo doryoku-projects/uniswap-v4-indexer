@@ -6,6 +6,7 @@ import { getChainConfig } from "../utils/chains";
 import { convertTokenToDecimal } from "../utils";
 import { getTrackedAmountUSD, getNativePriceInUSD } from "../utils/pricing";
 import { safeDiv, sanitizeBD } from "../utils/index";
+import { ZERO_BD } from "../utils/constants";
 import { findNativePerToken } from "../utils/pricing";
 import { sqrtPriceX96ToTokenPrices } from "../utils/pricing";
 import {
@@ -16,6 +17,16 @@ import {
   updateTokenHourData,
   updateUniswapDayData,
 } from "../utils/intervalUpdates";
+
+/*
+ * Hoisted out of the per-event path. Envio's review counted 18 `new BigDecimal`
+ * constructions per Swap event in this handler, most of them the same handful of
+ * literals rebuilt every time. bignumber.js instances are immutable, so one
+ * module-scope instance is safe to share.
+ */
+const BD_TWO = new BigDecimal("2");
+const BD_ONE_MILLION = new BigDecimal("1000000");
+const BD_NEG_ONE = new BigDecimal("-1");
 
 indexer.onEvent({ contract: "PoolManager", event: "Swap" }, async ({ event, context }) => {
   const chainConfig = getChainConfig(event.chainId);
@@ -66,7 +77,7 @@ indexer.onEvent({ contract: "PoolManager", event: "Swap" }, async ({ event, cont
 
   bundle = bundle || {
     id: event.chainId.toString(),
-    ethPriceUSD: new BigDecimal("0"),
+    ethPriceUSD: ZERO_BD,
   };
 
   // Update tokens' derivedETH values first
@@ -143,17 +154,17 @@ indexer.onEvent({ contract: "PoolManager", event: "Swap" }, async ({ event, cont
   const amount0 = convertTokenToDecimal(
     event.params.amount0,
     token0.decimals
-  ).times(new BigDecimal("-1"));
+  ).times(BD_NEG_ONE);
   const amount1 = convertTokenToDecimal(
     event.params.amount1,
     token1.decimals
-  ).times(new BigDecimal("-1"));
+  ).times(BD_NEG_ONE);
   // Get absolute amounts for volume
-  const amount0Abs = amount0.lt(new BigDecimal("0"))
-    ? amount0.times(new BigDecimal("-1"))
+  const amount0Abs = amount0.lt(ZERO_BD)
+    ? amount0.times(BD_NEG_ONE)
     : amount0;
-  const amount1Abs = amount1.lt(new BigDecimal("0"))
-    ? amount1.times(new BigDecimal("-1"))
+  const amount1Abs = amount1.lt(ZERO_BD)
+    ? amount1.times(BD_NEG_ONE)
     : amount1;
   const amount0ETH = amount0Abs.times(token0.derivedETH);
   const amount1ETH = amount1Abs.times(token1.derivedETH);
@@ -169,32 +180,28 @@ indexer.onEvent({ contract: "PoolManager", event: "Swap" }, async ({ event, cont
     event.chainId.toString(),
     chainConfig.whitelistTokens
   );
-  const amountTotalUSDTracked = trackedAmountUSD.div(new BigDecimal("2"));
+  const amountTotalUSDTracked = trackedAmountUSD.div(BD_TWO);
   const amountTotalETHTracked = safeDiv(
     amountTotalUSDTracked,
     bundle.ethPriceUSD
   );
-  const amountTotalUSDUntracked = amount0USD
-    .plus(amount1USD)
-    .div(new BigDecimal("2"));
+  const amountTotalUSDUntracked = amount0USD.plus(amount1USD).div(BD_TWO);
+  /*
+   * `pool.feeTier.toString()` ran FIVE times here and `new BigDecimal("1000000")`
+   * was constructed five more, every swap event. Both are loop-invariant: the fee
+   * tier is one field read and the divisor is a constant. Hoisted — identical
+   * values, same order of operations, one allocation instead of ten.
+   */
+  const feeTierBD = new BigDecimal(pool.feeTier.toString());
+  const feeRate = feeTierBD.div(BD_ONE_MILLION);
   // Calculate fees
-  const feesETH = amountTotalETHTracked
-    .times(pool.feeTier.toString())
-    .div(new BigDecimal("1000000"));
-  const feesUSD = amountTotalUSDTracked
-    .times(pool.feeTier.toString())
-    .div(new BigDecimal("1000000"));
+  const feesETH = amountTotalETHTracked.times(feeTierBD).div(BD_ONE_MILLION);
+  const feesUSD = amountTotalUSDTracked.times(feeTierBD).div(BD_ONE_MILLION);
   // Calculate untracked fees
-  const feesUSDUntracked = amountTotalUSDUntracked.times(
-    new BigDecimal(pool.feeTier.toString()).div(new BigDecimal("1000000"))
-  );
+  const feesUSDUntracked = amountTotalUSDUntracked.times(feeRate);
   // Calculate collected fees in tokens
-  const feesToken0 = amount0Abs
-    .times(pool.feeTier.toString())
-    .div(new BigDecimal("1000000"));
-  const feesToken1 = amount1Abs
-    .times(pool.feeTier.toString())
-    .div(new BigDecimal("1000000"));
+  const feesToken0 = amount0Abs.times(feeTierBD).div(BD_ONE_MILLION);
+  const feesToken1 = amount1Abs.times(feeTierBD).div(BD_ONE_MILLION);
   // Store current pool TVL values for later calculations
   const currentPoolTvlETH = pool.totalValueLockedETH;
   const currentPoolTvlUSD = pool.totalValueLockedUSD;
@@ -331,7 +338,7 @@ indexer.onEvent({ contract: "PoolManager", event: "Swap" }, async ({ event, cont
   ]);
 
   // Use for USD swap amount
-  const finalAmountUSD = amountTotalUSDTracked.gt(new BigDecimal("0"))
+  const finalAmountUSD = amountTotalUSDTracked.gt(ZERO_BD)
     ? amountTotalUSDTracked
     : amountTotalUSDUntracked;
 
@@ -377,15 +384,15 @@ indexer.onEvent({ contract: "PoolManager", event: "Swap" }, async ({ event, cont
   // After processing the swap, update HookStats if it's a hooked pool
   if (poolHookStats) {
     // Calculate volume and fees, using untracked volume as fallback
-    const volumeToAdd = amountTotalUSDTracked.gt(new BigDecimal("0"))
+    const volumeToAdd = amountTotalUSDTracked.gt(ZERO_BD)
       ? amountTotalUSDTracked
       : amountTotalUSDUntracked;
 
     // Calculate fees based on the volume we're using (use the same calculation as earlier in the code)
-    const feesToAdd = amountTotalUSDTracked.gt(new BigDecimal("0"))
+    const feesToAdd = amountTotalUSDTracked.gt(ZERO_BD)
       ? feesUSD
       : amountTotalUSDUntracked.times(
-          new BigDecimal(pool.feeTier.toString()).div(new BigDecimal("1000000"))
+          feeRate
         );
 
     context.HookStats.set({

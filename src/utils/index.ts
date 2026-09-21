@@ -1,14 +1,28 @@
 import { BigDecimal } from "envio";
 import { ZERO_BD, ONE_BD, ZERO_BI } from "./constants";
 
+/*
+ * MEMOISED. The body builds a string in a loop and parses it, and the pricing
+ * path calls it four times per Swap event — for one of only ~19 distinct inputs
+ * (the decimals of the tokens actually indexed). Caching turns a per-event
+ * string build into a Map hit. `BigDecimal` is bignumber.js and immutable, so
+ * sharing an instance across callers is safe.
+ */
+const exponentCache = new Map<bigint, BigDecimal>();
+
 export function exponentToBigDecimal(decimals: bigint): BigDecimal {
+  const hit = exponentCache.get(decimals);
+  if (hit !== undefined) return hit;
+
   let resultString = "1";
 
   for (let i = 0; i < Number(decimals); i++) {
     resultString += "0";
   }
 
-  return new BigDecimal(resultString);
+  const result = new BigDecimal(resultString);
+  exponentCache.set(decimals, result);
+  return result;
 }
 
 // return 0 if denominator is 0 in division
@@ -25,8 +39,29 @@ export function safeDiv(amount0: BigDecimal, amount1: BigDecimal): BigDecimal {
 // derivedETH on a manipulated oracle pool) can fail INSERTs on indexed numeric
 // columns. Apply at indexed-column writes and at price-source values that
 // propagate downstream (derivedETH, ethPriceUSD).
+const BD_MAX_DP = 40;
+
 export function sanitizeBD(value: BigDecimal): BigDecimal {
-  return new BigDecimal(value.toFixed(40));
+  /*
+   * FAST PATH, and it is the hot one. This runs 37 times per Swap event — 6 in
+   * the handler, 31 across the five interval-update helpers — and the previous
+   * body (`new BigDecimal(value.toFixed(40))`) formatted a 40-decimal STRING and
+   * reparsed it every single time. Envio measured the cost rising with sync
+   * progress for exactly that reason: as `volumeUSD`/`feesUSD`/`totalValueLocked`
+   * grow from hundreds to billions the strings lengthen, so both the format and
+   * the reparse get dearer. Swap went 221µs -> 303-367µs over five hours.
+   *
+   * Values already within 40 dp — the overwhelming majority — now return
+   * UNCHANGED, with no string and no allocation. `BigDecimal` is bignumber.js
+   * and immutable, so handing back the same instance is safe.
+   *
+   * ROUNDING MODE IS DELIBERATELY UNSPECIFIED so it inherits the same default as
+   * `toFixed(40)` did. Passing an explicit mode (`ROUND_DOWN`, say) would
+   * TRUNCATE where this rounds, silently changing stored values. Pinned by the
+   * parity test in `sanitizeBD.test.ts`.
+   */
+  const dp = value.decimalPlaces();
+  return dp !== null && dp <= BD_MAX_DP ? value : value.decimalPlaces(BD_MAX_DP);
 }
 
 export function hexToBigInt(hex: string): bigint {
