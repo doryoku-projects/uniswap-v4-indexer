@@ -6,7 +6,6 @@ A public, open-source multichain Uniswap V4 indexer built with [Envio HyperIndex
 
 Open to contributions.
 
-
 ![v4.xyz Dashboard](./v4.gif)
 
 ## What This Indexes
