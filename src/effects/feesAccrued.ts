@@ -37,7 +37,7 @@
  * cached call, which is exactly what this effect's output does.
  */
 
-import { createEffect, S } from "envio";
+import { createEffect, S, type EffectArgs } from "envio";
 import { createPublicClient, http, decodeFunctionData, toFunctionSelector } from "viem";
 import type { PublicClient } from "viem";
 
@@ -126,7 +126,9 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
  *    turn one failed trace into 1 + N serial re-invocations — the swallowed
  *    preload attempt plus one per event sharing that transaction in the
  *    sequential pass — each paying the full retry ladder below, up to 8s of
- *    backoff. Returning `[]` costs one attempt for the whole batch.
+ *    backoff. Returning `[]` costs one attempt for the whole batch — plus,
+ *    since the preload prefetch, exactly one serial `getFeesAccruedRetry`
+ *    ladder, which is the price of not trusting a `[]` taken mid-burst.
  *
  * An earlier version of this file rethrew transient errors with the comment
  * "let the runtime's own retry handle it". There is no such retry. Under
@@ -361,6 +363,100 @@ const FeesBySalt = S.array(
   }),
 );
 
+type FeesAccruedInput = { readonly txHash: string; readonly poolManager: string };
+type FeesAccruedOutput = S.Output<typeof FeesBySalt>;
+
+/**
+ * The trace itself, shared by `getFeesAccrued` and `getFeesAccruedRetry`.
+ *
+ * ONE function behind TWO effects, and the reason is Envio's in-batch memo, not
+ * style. `LoadManager.res:135` answers a real-pass call from the memo whenever
+ * the key is present — and `InMemoryStore.setEffectOutput` stores the output
+ * even when `context.cache = false` (it only skips the DB write). So once the
+ * preload pass has prefetched a DEGRADED `[]` for a transaction, every later
+ * `getFeesAccrued` call in that batch is served that `[]` without a new
+ * attempt. A second effect NAME is a second memo, a second rate-limit window
+ * and a second (never-created, since it is uncached) table, so the real pass
+ * can re-trace through it. `createEffect` does not mutate its handler
+ * (Envio.res:238-290), so sharing it is safe.
+ */
+async function traceFeesAccrued({
+  context,
+  input: { txHash, poolManager },
+}: EffectArgs<FeesAccruedInput>): Promise<FeesAccruedOutput> {
+  const chainId = context.chain.id;
+  const pm = poolManager.toLowerCase();
+  const client = traceClient(chainId);
+
+  for (let attempt = 0; attempt < TRACE_MAX_ATTEMPTS; attempt++) {
+    let trace: TraceNode;
+    try {
+      trace = (await client.request({
+        method: "debug_traceTransaction",
+        params: [txHash as `0x${string}`, { tracer: "callTracer" }],
+      } as never)) as TraceNode;
+    } catch (e) {
+      if (isTraceCapabilityError(e)) {
+        // DO NOT CACHE a degraded result. The cache is persisted and keyed on
+        // the input, so caching this would make "no collected fee for this
+        // transaction" permanent — surviving restarts and a full resync, and
+        // indistinguishable from a genuine zero even after the RPC is fixed.
+        // `context.cache = false` is the repo's existing idiom for exactly
+        // this (src/utils/tokenMetadata.ts:131,207).
+        context.cache = false;
+        context.log.warn(
+          `debug_traceTransaction/callTracer unsupported on chain ${chainId} — ` +
+            `collected fees recorded as 0 for tx ${txHash}`,
+        );
+        return [];
+      }
+      // Transient. Retried HERE, never rethrown — see the note on
+      // TRANSIENT_BACKOFF_MS: an uncaught throw in the sequential pass is a
+      // fatal exit, and even where it is caught (the preload pass swallows
+      // it) a failed effect is neither memoised nor deduped, so a throw
+      // multiplies one bad trace into a serial retry storm.
+      if (attempt < TRACE_MAX_ATTEMPTS - 1) {
+        const waitMs = TRANSIENT_BACKOFF_MS[Math.min(attempt, TRANSIENT_BACKOFF_MS.length - 1)]!;
+        context.log.warn(
+          `Trace attempt ${attempt + 1}/${TRACE_MAX_ATTEMPTS} failed for tx ${txHash} on chain ` +
+            `${chainId} (${e instanceof Error ? e.message.split("\n")[0] : String(e)}) — ` +
+            `retrying in ${waitMs}ms`,
+        );
+        await sleep(waitMs);
+        continue;
+      }
+      // Exhausted. Degrade rather than exit, and do not cache the zero.
+      context.cache = false;
+      context.log.error(
+        `All ${TRACE_MAX_ATTEMPTS} trace attempts failed for tx ${txHash} on chain ${chainId}: ` +
+          `${e instanceof Error ? e.message.split("\n")[0] : String(e)} — recording 0 collected ` +
+          `fees for this transaction. Re-run once the RPC is healthy to pick it up.`,
+      );
+      return [];
+    }
+
+    const frames = framesFromTrace(trace, pm);
+
+    // Usable = the top call did not revert AND at least one modifyLiquidity
+    // frame decoded with a full BalanceDelta output.
+    if (!trace?.error && frames.length > 0) {
+      return frames;
+    }
+
+    if (attempt < TRACE_MAX_ATTEMPTS - 1) await sleep(TRACE_RETRY_DELAY_MS);
+  }
+
+  // Same reasoning as the capability branch: an unusable trace is a statement
+  // about the provider at this moment, not about the transaction, so it must
+  // not be frozen into the cache as a measured zero.
+  context.cache = false;
+  context.log.warn(
+    `No usable trace for tx ${txHash} on chain ${chainId} after ${TRACE_MAX_ATTEMPTS} ` +
+      `attempts — collected fees recorded as 0`,
+  );
+  return [];
+}
+
 export const getFeesAccrued = createEffect(
   {
     name: "getFeesAccrued",
@@ -385,77 +481,50 @@ export const getFeesAccrued = createEffect(
     // but contention.
     crossChain: false,
   },
-  async ({ context, input: { txHash, poolManager } }) => {
-    const chainId = context.chain.id;
-    const pm = poolManager.toLowerCase();
-    const client = traceClient(chainId);
+  traceFeesAccrued,
+);
 
-    for (let attempt = 0; attempt < TRACE_MAX_ATTEMPTS; attempt++) {
-      let trace: TraceNode;
-      try {
-        trace = (await client.request({
-          method: "debug_traceTransaction",
-          params: [txHash as `0x${string}`, { tracer: "callTracer" }],
-        } as never)) as TraceNode;
-      } catch (e) {
-        if (isTraceCapabilityError(e)) {
-          // DO NOT CACHE a degraded result. The cache is persisted and keyed on
-          // the input, so caching this would make "no collected fee for this
-          // transaction" permanent — surviving restarts and a full resync, and
-          // indistinguishable from a genuine zero even after the RPC is fixed.
-          // `context.cache = false` is the repo's existing idiom for exactly
-          // this (src/utils/tokenMetadata.ts:131,207).
-          context.cache = false;
-          context.log.warn(
-            `debug_traceTransaction/callTracer unsupported on chain ${chainId} — ` +
-              `collected fees recorded as 0 for tx ${txHash}`,
-          );
-          return [];
-        }
-        // Transient. Retried HERE, never rethrown — see the note on
-        // TRANSIENT_BACKOFF_MS: an uncaught throw in the sequential pass is a
-        // fatal exit, and even where it is caught (the preload pass swallows
-        // it) a failed effect is neither memoised nor deduped, so a throw
-        // multiplies one bad trace into a serial retry storm.
-        if (attempt < TRACE_MAX_ATTEMPTS - 1) {
-          const waitMs = TRANSIENT_BACKOFF_MS[Math.min(attempt, TRANSIENT_BACKOFF_MS.length - 1)]!;
-          context.log.warn(
-            `Trace attempt ${attempt + 1}/${TRACE_MAX_ATTEMPTS} failed for tx ${txHash} on chain ` +
-              `${chainId} (${e instanceof Error ? e.message.split("\n")[0] : String(e)}) — ` +
-              `retrying in ${waitMs}ms`,
-          );
-          await sleep(waitMs);
-          continue;
-        }
-        // Exhausted. Degrade rather than exit, and do not cache the zero.
-        context.cache = false;
-        context.log.error(
-          `All ${TRACE_MAX_ATTEMPTS} trace attempts failed for tx ${txHash} on chain ${chainId}: ` +
-            `${e instanceof Error ? e.message.split("\n")[0] : String(e)} — recording 0 collected ` +
-            `fees for this transaction. Re-run once the RPC is healthy to pick it up.`,
-        );
-        return [];
-      }
-
-      const frames = framesFromTrace(trace, pm);
-
-      // Usable = the top call did not revert AND at least one modifyLiquidity
-      // frame decoded with a full BalanceDelta output.
-      if (!trace?.error && frames.length > 0) {
-        return frames;
-      }
-
-      if (attempt < TRACE_MAX_ATTEMPTS - 1) await sleep(TRACE_RETRY_DELAY_MS);
-    }
-
-    // Same reasoning as the capability branch: an unusable trace is a statement
-    // about the provider at this moment, not about the transaction, so it must
-    // not be frozen into the cache as a measured zero.
-    context.cache = false;
-    context.log.warn(
-      `No usable trace for tx ${txHash} on chain ${chainId} after ${TRACE_MAX_ATTEMPTS} ` +
-        `attempts — collected fees recorded as 0`,
-    );
-    return [];
+/**
+ * The real pass's second attempt when `getFeesAccrued` came back EMPTY.
+ *
+ * `[]` is an exact failure signal, not a heuristic: every `return []` in
+ * `traceFeesAccrued` sets `context.cache = false` (capability gap, exhausted
+ * transient retries, no usable trace), and the only other return requires
+ * `frames.length > 0`. The one deterministic `[]` — a capability gap, or a
+ * `poolManager` that matches no frame — costs this retry one more attempt and
+ * changes nothing.
+ *
+ * WHY IT EXISTS NOW. `getFeesAccrued` is prefetched in the PRELOAD pass, where
+ * up to `rateLimit.calls` traces START per window per chain — with no cap on
+ * how many are in flight — instead of the one the serial loop used to have. A provider 429 or tracer-timeout
+ * burst therefore degrades far more traces at once, and a degraded `[]` is a
+ * PERMANENT zero: `totalFeesCollected` only grows and a replay skips on the
+ * watermark. This serial retry, under today's one-in-flight conditions, bounds
+ * that loss to transactions that fail twice.
+ *
+ * NEVER CALL IT IN PRELOAD — that would recreate the burst it exists to escape.
+ *
+ * `cache: false`, deliberately. The primary cache is the authority; a success
+ * persisted under this name would never be read by `getFeesAccrued` on a
+ * resync (different table), so it would only add a table. An uncached effect
+ * never creates one. The input and output are the SAME shapes as
+ * `getFeesAccrued`'s and must stay so — the handler passes one input object to
+ * both.
+ */
+export const getFeesAccruedRetry = createEffect(
+  {
+    name: "getFeesAccruedRetry",
+    input: S.schema({
+      txHash: S.string,
+      poolManager: S.string,
+    }),
+    output: FeesBySalt,
+    cache: false,
+    rateLimit: { calls: 20, per: "second" },
+    // Chain-scoped for the same reason as `getFeesAccrued`, and required:
+    // `traceFeesAccrued` reads `context.chain.id`, which throws on a
+    // cross-chain effect.
+    crossChain: false,
   },
+  traceFeesAccrued,
 );

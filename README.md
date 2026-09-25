@@ -228,7 +228,7 @@ unchanged and only the runtime differs.
 | DEPOSIT / WITHDRAW transaction rows            | `src/handlers/modifyLiquidity-handler.ts`                        | zero RPC                                        |
 | Uncollected fees                               | `src/handlers/feeSync-block.ts` + `src/effects/positionState.ts` | one multicall per 400-position chunk, HEAD ONLY |
 | Fee-growth baseline (NOT a trace gate)         | `src/utils/feeGate.ts` + `src/effects/positionState.ts`          | one cached `eth_call`, issued in the PRELOAD pass |
-| Collected fees + COLLECT_FEES rows             | `src/effects/feesAccrued.ts` + `src/utils/feeFrames.ts`          | one `debug_traceTransaction` per TRANSACTION that settles a position which held liquidity |
+| Collected fees + COLLECT_FEES rows             | `src/effects/feesAccrued.ts` + `src/utils/feeFrames.ts`          | one `debug_traceTransaction` per TRANSACTION that settles a position which held liquidity, PREFETCHED in the preload pass (serial fallback on a miss, serial retry on a failed trace) |
 | Serving the backend                            | the backend's own converter (`backend/src/subgraph/hyperindex/`) | —                                               |
 
 ### Three things that are load-bearing
@@ -548,7 +548,8 @@ failing. `feeGate` returns the constructed input, so there is one construction, 
 
 The same block also warms `Position.get`, `PositionTransaction.getWhere` and
 `ModifyLiquidity.getWhere` — one serialised SELECT each per event in the sequential pass, which
-collapse into grouped queries under preload (`UserContext.res.mjs:69,84`). The last of the three
+collapse into grouped queries under preload (`UserContext.res.mjs:84,123`). `Position.get` is the
+one whose result is USED there: it gates the trace prefetch below. The last of the three
 is what the fee-frame ordinal is counted over, so warming it keeps that count out of the serial
 loop; rows written later in the real pass are added to the same in-memory filter index by
 `InMemoryTable.updateIndexes`, so an earlier same-salt event of the same transaction is counted
@@ -562,11 +563,41 @@ patch cannot reintroduce them without changing the signature. `traceGateCanPass`
 rather than a claim, and so that pool price state is not even in scope to gate on. Why each of
 those matters is the next section.
 
-**`getFeesAccrued` is deliberately NOT hoisted.** It is gated on the POSITION's stored liquidity,
-which the preload pass does not have — it discards its reads and never reaches the position block.
-Hoisting would therefore trace every transaction speculatively, mints included, and at
-`{calls: 20, per: "second"}` those speculative traces would displace real ones in the same
-rate-limit window for an upside capped near 1x.
+**`getFeesAccrued` is PREFETCHED in the preload pass.** An earlier version of this README said it
+could not be, and all three reasons were wrong. The preload pass DOES have the position's stored
+liquidity — `Position.get` returns the row as of batch start; only writes are no-ops there. A gated
+hoist does not trace mints — `traceGateForRow(snapshot, delta)` is false for a missing row with a
+positive delta. And the upside is not "capped near 1x": the trace was measured at 0.785s of every
+wall second, all of it paid serially.
+
+So the preload block calls `traceGateForRow` — the SAME helper the real pass decides with, in
+`src/utils/feeGate.ts` — on the batch-start row and, if it passes, issues the identical
+`getFeesAccrued` call. The real pass's call then resolves from the in-batch memo
+(`LoadManager.res:135`), or joins the in-flight promise (`:161`). The prefetch decides nothing: the
+real pass re-evaluates the gate on the running row. A snapshot made stale by an earlier event of
+the same batch changes only cost — minted-then-increased is a miss, traced serially as before;
+withdrawn-then-re-added is one trace nobody reads. `src/feesPrefetch.test.ts` drives both passes
+and counts trace requests per transaction.
+
+**A failed prefetch is retried, serially, under a second effect name.** Envio memoises a degraded
+`[]` for the rest of the batch even though `context.cache = false` (that flag only skips the DB
+write), so asking `getFeesAccrued` again would replay it. The prefetch runs in a burst in which up
+to `rateLimit.calls` traces START per window per chain — the limiter caps starts, not calls in
+flight, so slow or retrying traces pile up past it — and a provider 429 or tracer timeout is far
+more likely there than with the one-in-flight serial loop, and a degraded `[]` is a PERMANENT zero
+(`totalFeesCollected` only grows; a replay skips on the watermark). So when the real pass gets `[]`
+it calls `getFeesAccruedRetry` — the same function, its own memo and rate-limit window, uncached so
+it creates no table. `[]` is an exact failure signal: every `return []` in the effect is a degraded
+path, and success requires at least one frame. `getFeesAccrued`'s name, input, output, `cache` and
+`crossChain` are untouched, so the persisted trace cache is still valid.
+
+**`getFeesAccrued`'s `rateLimit` is now the throughput ceiling — size it to the RPC plan.** Before
+the prefetch the serial loop never exceeded ~3.35 traces/s; now up to `calls` start per window per
+chain, and every chain's traces plus every `getFeeGrowthInside` batch MEMBER draw from the
+provider's limit. On an account-wide limit (Dwellir's Developer plan is 100 responses/s shared by
+every chain and key, 500 burst, batch members counted individually) 20/s on four chains does not
+fit alongside the `eth_call` traffic. `rateLimit` is runtime-only — it is not part of the cache
+key or the table name — so lowering it is always safe.
 
 **`getFeeGrowthInside`'s rate limit is now load-bearing, and is 500/s.** With the read hoisted,
 the limiter — not RPC latency — is the ceiling on how wide a preload batch can go. `config.yaml`
@@ -670,7 +701,7 @@ trace decodes `feesAccrued = (262354965774593714, 6708203)` while BOTH indexers 
 #### Cost
 
 Acceptable, because **a trace is per TRANSACTION, not per event**: `getFeesAccrued` is keyed on
-`(chainId, txHash, poolManager)` with `cache: true`, so a 15-frame router batch is ONE trace and a
+`(txHash, poolManager)`, chain-scoped, with `cache: true`, so a 15-frame router batch is ONE trace and a
 resync with a warm cache is free. Measured over the whole history of chain 43114: **+7,381 traces,
 at most 1.6x**. Widening the effect's output schema does not invalidate anything dangerously: a
 cache row that no longer parses is caught by `LoadLayer.res.mjs:173-187`, logged as "Invalidated

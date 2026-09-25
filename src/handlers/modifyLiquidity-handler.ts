@@ -15,13 +15,13 @@ import {
   positionTxId,
   tokenIdFromSalt,
 } from "../utils/positions";
-import { getFeesAccrued } from "../effects/feesAccrued";
+import { getFeesAccrued, getFeesAccruedRetry } from "../effects/feesAccrued";
 import { pickFeeFrame, saltOrdinal } from "../utils/feeFrames";
 import {
   feeGate,
   readFeeGrowthInside,
   shouldTraceFees,
-  traceGateCanPass,
+  traceGateForRow,
   type FeeGateEvent,
 } from "../utils/feeGate";
 import { positionManagerFor } from "../utils/v4Addresses";
@@ -119,6 +119,20 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
     poolSqrtPrice: existingPool.sqrtPrice,
   };
 
+  /*
+   * The `getFeesAccrued` input, built ONCE for the same reason as `feeGateEvent`:
+   * the preload pass prefetches the trace and the real pass must ask for the
+   * byte-identical key or it misses the memo and pays trace latency in series.
+   * Also handed to `getFeesAccruedRetry`, whose input shape is the same.
+   *
+   * NEVER ADD A FIELD. The input is the persisted cache key; any change re-traces
+   * every transaction already cached (5M+ rows, and there is no migration).
+   */
+  const feesInput = {
+    txHash: event.transaction.hash,
+    poolManager: chainConfig.poolManagerAddress,
+  };
+
   if (context.isPreload) {
     /*
      * Everything this handler can possibly need from the network or the store,
@@ -133,20 +147,31 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
      * The two entity reads are the same story without the RPC:
      * `Position.get` and `PositionTransaction.getWhere` are one SELECT each per
      * event in the serial pass, and collapse into grouped queries under preload
-     * (`UserContext.res.mjs:69,84` pass `isPreload` through as `shouldGroup`).
+     * (`UserContext.res.mjs:84,123` pass `isPreload` through as `shouldGroup`).
      *
      * Results are discarded, exactly as `preloadIntervalData` documents at
      * utils/intervalUpdates.ts:159-171 — the point is the side effect on the
      * load layer and the effect output dict, which the real pass reads back.
+     * The one read that is USED here is `Position.get`, and only to decide
+     * whether to prefetch the trace; nothing is written from it.
      *
-     * `getFeesAccrued` is deliberately NOT hoisted, and the reason CHANGED with
-     * the gate. It used to be gated on the RESULT of `getFeeGrowthInside`; it is
-     * now gated on the POSITION's stored liquidity, which this pass does not
-     * have — the preload pass discards its reads and never reaches the position
-     * block below. Hoisting it would therefore trace every transaction
-     * speculatively, mints included, and mints are the bulk of ModifyLiquidity.
-     * At {calls: 20, per: "second"} those speculative traces would displace real
-     * ones in the same rate-limit window, for an upside capped near 1x.
+     * `getFeesAccrued` IS PREFETCHED HERE, and an earlier version of this comment
+     * said it could not be. It claimed this pass lacks the position's stored
+     * liquidity — false: `Position.get` below returns the row as of BATCH START
+     * (reads are real under preload; only `set` is a no-op). It claimed a hoist
+     * would trace every mint — only an UNGATED one would: gated on
+     * `traceGateForRow` of that snapshot, a mint (no row, delta > 0) is never
+     * prefetched. And it claimed an upside "capped near 1x" — measured instead
+     * at 0.785s of trace latency per wall second, all paid serially.
+     *
+     * The prefetch decides NOTHING about data. The real pass re-evaluates the
+     * gate against the running row and alone decides whether the trace is read;
+     * a snapshot that is stale by an earlier event of this batch costs either a
+     * serial trace (as before) or one trace nobody reads. See `traceGateForRow`.
+     *
+     * A DEGRADED prefetch is the one thing this changes: its `[]` sits in the
+     * memo and the real pass would be served it without a new attempt. That is
+     * what `getFeesAccruedRetry` is for — see the real-pass call below.
      */
     const gate = feeGate(feeGateEvent);
     await Promise.all([
@@ -185,8 +210,18 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
             transaction: { _eq: event.transaction.hash },
           })
         : undefined,
+      // Warms the row for the real pass AND gates the trace prefetch on it.
+      // `.then` keeps the effect call grouped: this context still has
+      // `isPreload`, so the call joins the batch's `getFeesAccrued` group and
+      // the real pass's identical call resolves from the memo
+      // (`LoadManager.res:135`), or joins the in-flight promise if it is still
+      // running (`:161`).
       gate.tokenId !== undefined
-        ? context.Position.get(positionId(event.chainId, gate.tokenId))
+        ? context.Position.get(positionId(event.chainId, gate.tokenId)).then((row) =>
+            traceGateForRow(row, event.params.liquidityDelta)
+              ? context.effect(getFeesAccrued, feesInput)
+              : undefined,
+          )
         : undefined,
     ]);
     return;
@@ -743,7 +778,6 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
      * diverge permanently at mint (43114_1356), so it can read false for a
      * position's entire life.
      */
-    const hadPosition = existing.poolId !== "";
 
     /*
      * A DETECTABLE DESYNC, which must trace even though the skip above says it
@@ -766,11 +800,12 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
      * are 69.9% of fee-bearing settlements. Pinned in
      * `feeFramePairing.test.ts`. Trace both.
      */
-    const gateCanPass = traceGateCanPass({
-      hadPosition,
-      storedLiquidity: existing.liquidity,
-      liquidityDelta: delta,
-    });
+    //
+    // `hadPosition` is `existing.poolId !== ""`. Both clauses are evaluated by
+    // `traceGateForRow`, the SAME construction the preload block uses to decide
+    // what to prefetch, so the two passes cannot drift. This call is the one that
+    // decides; the preload answer only ever changes cost.
+    const gateCanPass = traceGateForRow(existing, delta);
 
     /*
      * THE SAME CALL THE PRELOAD BLOCK ABOVE ALREADY MADE, with the same
@@ -829,15 +864,46 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
      * conservative is on `shouldTraceFees` in utils/feeGate.ts.
      */
     if (shouldTraceFees({ gateCanPass })) {
-      const [fees, modifyRowsThisTx] = await Promise.all([
-        context.effect(getFeesAccrued, {
-          txHash: event.transaction.hash,
-          poolManager: chainConfig.poolManagerAddress,
-        }),
+      /*
+       * Normally resolves from the memo the preload prefetch filled, with no
+       * network. It stays a real `context.effect` call rather than a value read
+       * out of preload so this path is correct on its own: a prefetch the
+       * snapshot skipped (mint then increase in one batch), or a preload whose
+       * throw was swallowed, costs one serial trace here and nothing else.
+       */
+      const [firstFees, modifyRowsThisTx] = await Promise.all([
+        context.effect(getFeesAccrued, feesInput),
         // Warmed by the preload block above, so this resolves from the
         // in-memory filter index rather than a SELECT in the serial loop.
         context.ModifyLiquidity.getWhere({ transaction: { _eq: event.transaction.hash } }),
       ]);
+
+      /*
+       * `[]` MEANS THE TRACE FAILED — every `return []` in the effect is a
+       * degraded path with `context.cache = false` — and a failed prefetch's
+       * `[]` is memoised for the rest of the batch, so asking `getFeesAccrued`
+       * again would only replay it. The prefetch ran in a burst where up to
+       * `rateLimit.calls` traces START per window, with no cap on how many are in
+       * flight — under 429s or timeouts far more than `calls` run at once. This
+       * second attempt runs serially, under the one-in-flight conditions the
+       * serial loop always had. A
+       * separate effect NAME is what makes it a real attempt: its own memo, its
+       * own rate-limit window, and uncached, so it adds no table.
+       *
+       * Later events of the same transaction reuse the retry's memo, so a
+       * failed transaction costs at most one retry per batch. Never in preload.
+       */
+      let fees = firstFees;
+      if (firstFees.length === 0) {
+        fees = await context.effect(getFeesAccruedRetry, feesInput);
+        if (fees.length > 0) {
+          context.log.warn(
+            `getFeesAccrued returned no frames for tx ${event.transaction.hash} on chain ` +
+              `${event.chainId}; the serial retry recovered ${fees.length} — collected fees ` +
+              `for this transaction come from the retry.`,
+          );
+        }
+      }
 
       /*
        * ORDINAL PAIRING. THE defect this change exists for.

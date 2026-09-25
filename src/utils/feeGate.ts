@@ -13,6 +13,11 @@
  * inside the strictly serial handler loop. So the predicate lives here, once,
  * and both sites call it.
  *
+ * `getFeesAccrued` now has the same two call sites for the same reason: the
+ * preload block PREFETCHES the trace, the real path reads it back from the memo.
+ * Its gate is `traceGateForRow`, below, called by both — the preload call only
+ * against the batch-start row, which can change cost but never a value.
+ *
  * `shouldTraceFees` is here for the same reason in reverse: it has one call
  * site, but it is the gate that decides whether a `debug_traceTransaction`
  * runs, i.e. whether a collected fee is measured or silently recorded as zero.
@@ -156,9 +161,9 @@ export function feeGate(e: FeeGateEvent): FeeGateDecision {
       // cache table, and the handler reads it from `context.chain.id`.
       // `?? ""` rather than a skip, matching the call site this replaced: a
       // chain with no StateView produces a failing read, which returns
-      // `ok: false` and therefore FORCES the trace. Skipping would instead
-      // produce `undefined`, which reads as "unchanged" and would silently
-      // record no collected fee.
+      // `ok: false` and keeps the row's previous fee-growth baseline. (An
+      // earlier version said it "FORCES the trace"; it no longer can — the
+      // trace gate is `gateCanPass` alone, see `shouldTraceFees`.)
       stateView: v4AddressesFor(e.chainId)?.stateView ?? "",
       poolId: e.poolId,
       tickLower: Number(e.tickLower),
@@ -251,7 +256,7 @@ export async function readFeeGrowthInside(
  * ─── WHAT IT COSTS ─────────────────────────────────────────────────────────
  *
  * A trace is per TRANSACTION, not per event: `getFeesAccrued` is keyed on
- * (chainId, txHash, poolManager) with `cache: true`, so a 15-frame router batch
+ * (txHash, poolManager), chain-scoped, with `cache: true`, so a 15-frame router batch
  * is ONE trace, every event in it shares that trace, and a resync with a warm
  * cache pays nothing. Measured over the whole history of chain 43114: +7,381
  * traces, at most 1.6x. The conjunct that keeps it there is
@@ -317,4 +322,40 @@ export function traceGateCanPass(args: {
 }): boolean {
   const storeLiquidityDesynced = args.storedLiquidity === 0n && args.liquidityDelta <= 0n;
   return (args.hadPosition && args.storedLiquidity > 0n) || storeLiquidityDesynced;
+}
+
+/**
+ * `traceGateCanPass` against a stored Position ROW — the form BOTH call sites
+ * use, so the trace gate has one construction and not two.
+ *
+ * The two sites are the handler's real pass, which decides, and the preload
+ * pass, which only PREFETCHES `getFeesAccrued` so the real pass's identical call
+ * resolves from the in-batch memo instead of paying trace latency inside the
+ * serial loop. Same hazard as `feeGate` above: if the preload copy drifted, it
+ * would either trace what nobody reads or skip what the real pass needs and put
+ * a full trace round trip back in series. Silently, in both cases.
+ *
+ * `row === undefined` is the case the real pass fills with `newPosition()`,
+ * whose `poolId` is `""` and `liquidity` is `0n` (utils/positions.ts), so it is
+ * mapped to exactly those two values here rather than needing a stub row.
+ *
+ * WHAT THE PRELOAD ANSWER IS WORTH. Preload sees the row as of BATCH START —
+ * its reads are real, but its writes are no-ops, so no earlier event of the
+ * same batch is reflected. Only COST can differ from the real pass, never a
+ * value: the real pass re-evaluates this against the running row and alone
+ * decides whether the trace is read.
+ *   - minted (or re-funded from 0) earlier in the batch, then increased ⇒
+ *     preload says no, real pass says yes ⇒ a miss, traced serially as before;
+ *   - fully withdrawn earlier in the batch, then re-added ⇒ preload says yes,
+ *     real pass says no ⇒ one trace nobody reads.
+ */
+export function traceGateForRow(
+  row: { readonly poolId: string; readonly liquidity: bigint } | undefined,
+  liquidityDelta: bigint,
+): boolean {
+  return traceGateCanPass({
+    hadPosition: row !== undefined && row.poolId !== "",
+    storedLiquidity: row?.liquidity ?? 0n,
+    liquidityDelta,
+  });
 }
