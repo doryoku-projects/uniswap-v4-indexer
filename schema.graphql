@@ -1,10 +1,17 @@
+# Composite indexes below are sized to the GraphQL queries the backend actually
+# sends (Hasura logs), not guessed: each leads with the column every such query
+# filters on by equality, then the column it ranges or sorts on.
 type Swap
   @storage(postgres: true)
-  @index(fields: ["pool", ["timestamp", "DESC"]]) {
+  @index(fields: ["pool", ["timestamp", "DESC"]])
+  # Per-pool swap pages ordered or ranged by id.
+  @index(fields: ["pool", "id"])
+  # Latest swap per chain (`chainId _eq`, `timestamp _lt`, order timestamp desc).
+  @index(fields: ["chainId", ["timestamp", "DESC"]]) {
   id: ID!
   chainId: BigInt!
   transaction: String! # Instead of Transaction reference
-  timestamp: BigInt! @index
+  timestamp: BigInt!
   pool: String! # Instead of Pool reference
   token0: Token! # Changed from String to Token reference
   token1: Token! # Changed from String to Token reference
@@ -45,14 +52,18 @@ type PoolManager @storage(postgres: true) {
 type Pool
   @storage(postgres: true)
   @index(fields: ["chainId", ["totalValueLockedUSD", "DESC"]])
-  @index(fields: ["hooks", "chainId", ["totalValueLockedUSD", "DESC"]]) {
+  @index(fields: ["hooks", "chainId", ["totalValueLockedUSD", "DESC"]])
+  # Top pools per chain by volume.
+  @index(fields: ["chainId", ["volumeUSD", "DESC"]])
+  # Pools created on a chain after a given block.
+  @index(fields: ["chainId", "createdAtBlockNumber"]) {
   id: ID!
   chainId: BigInt!
   name: String!
   createdAtTimestamp: BigInt! @index
   createdAtBlockNumber: BigInt!
-  token0: String! # Instead of Token reference
-  token1: String! # Instead of Token reference
+  token0: String! @index # Instead of Token reference
+  token1: String! @index # Instead of Token reference
   feeTier: BigInt!
   liquidity: BigInt!
   sqrtPrice: BigInt!
@@ -63,18 +74,18 @@ type Pool
   observationIndex: BigInt!
   volumeToken0: BigDecimal!
   volumeToken1: BigDecimal!
-  volumeUSD: BigDecimal! @index
+  volumeUSD: BigDecimal!
   untrackedVolumeUSD: BigDecimal!
   feesUSD: BigDecimal!
   feesUSDUntracked: BigDecimal!
-  txCount: BigInt! @index
+  txCount: BigInt!
   collectedFeesToken0: BigDecimal!
   collectedFeesToken1: BigDecimal!
   collectedFeesUSD: BigDecimal!
   totalValueLockedToken0: BigDecimal!
   totalValueLockedToken1: BigDecimal!
   totalValueLockedETH: BigDecimal!
-  totalValueLockedUSD: BigDecimal! @index
+  totalValueLockedUSD: BigDecimal!
   totalValueLockedUSDUntracked: BigDecimal!
   liquidityProviderCount: BigInt!
   hooks: String!
@@ -154,9 +165,16 @@ type HookStats @storage(postgres: true) {
   totalFeesUSD: BigDecimal! # Total fees across all pools using this hook
 }
 
-type Position @storage(postgres: true) {
+type Position
+  @storage(postgres: true)
+  # The backend's change feed: `chainId _eq`, `updatedAtBlock _gt`, ordered by
+  # (updatedAtBlock, id). A single-column updatedAtBlock index can't serve it,
+  # because block numbers from other chains interleave in the same range.
+  @index(fields: ["chainId", "updatedAtBlock", "id"])
+  # The fee sweep's `chainId _eq`, `feesUpdatedAtBlock _lte` (see below).
+  @index(fields: ["chainId", "feesUpdatedAtBlock"]) {
   id: ID! # <chainId>_<tokenId>
-  chainId: BigInt! @index
+  chainId: BigInt!
   tokenId: BigInt! @index
   owner: String! @index # address of current owner
   origin: String! # the EOA that minted the position
@@ -209,11 +227,15 @@ type Position @storage(postgres: true) {
   # active set as changed and triggers thousands of refreshes for quantities
   # that did not move. Keeping them apart is the fix, and it only works if it is
   # in the schema from the start.
-  updatedAtBlock: BigInt! @index
+  updatedAtBlock: BigInt!
   updatedAtTimestamp: BigInt!
   # Indexed: the fee sweep queries `feesUpdatedAtBlock _lt <cutoff>` to find
   # positions it has not refreshed this cycle, which is what keeps its working
   # set bounded instead of scanning every active position like Ponder does.
+  # The sweep itself is served by the (chainId, feesUpdatedAtBlock) composite
+  # above; this single-column index stays because `getWhere` wants an index
+  # leading with every column it filters on, and would otherwise build one
+  # lazily on a hot table.
   feesUpdatedAtBlock: BigInt! @index
   feesUpdatedAtTimestamp: BigInt!
 
@@ -315,7 +337,9 @@ type Unsubscribe @storage(postgres: true) {
 type ModifyLiquidity
   @storage(postgres: true)
   @index(fields: ["pool", ["timestamp", "DESC"]])
-  @index(fields: ["pool", "transaction"]) {
+  @index(fields: ["pool", "transaction"])
+  # Latest event per chain.
+  @index(fields: ["chainId", ["timestamp", "DESC"]]) {
   id: ID!
   chainId: BigInt!
   # Indexed because the fee-frame ORDINAL is derived from it: the handler counts
@@ -326,7 +350,7 @@ type ModifyLiquidity
   # to `ensureQueryIndexes`, which would build it lazily on a hot table and pause
   # writes while it does.
   transaction: String! @index # Instead of Transaction reference
-  timestamp: BigInt! @index
+  timestamp: BigInt!
   pool: Pool! # Instead of Pool reference
   token0: Token! # Token reference like in Swap entity
   token1: Token! # Token reference like in Swap entity
@@ -365,7 +389,9 @@ type UniswapDayData
 # Data accumulated and condensed into day stats for each pool
 type PoolDayData
   @storage(postgres: true)
-  @index(fields: ["pool", ["date", "DESC"]]) {
+  @index(fields: ["pool", ["date", "DESC"]])
+  # Latest day per chain.
+  @index(fields: ["chainId", ["date", "DESC"]]) {
   id: ID! # <chainId>_<poolId>_<dayIndex>
   chainId: BigInt!
   date: Int! # unix timestamp of the start of the day (dayIndex * 86400)
