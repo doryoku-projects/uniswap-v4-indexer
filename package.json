@@ -23,7 +23,7 @@
     "vitest": "4.1.0"
   },
   "dependencies": {
-    "envio": "3.7.0",
+    "envio": "3.13.0",
     "graphql": "16.9.0",
     "postgres": "3.4.8"
   }
