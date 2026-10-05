@@ -65,6 +65,8 @@ describe("Uniswap V4 Indexer", { timeout: NETWORK_TIMEOUT_MS }, () => {
                   "id": "1_133850",
                   "isActive": false,
                   "isPriceable": true,
+                  "lastModifyBlock": 0n,
+                  "lastModifyLogIndex": 0n,
                   "liquidity": 0n,
                   "origin": "0x16a4eC779ec71F9019fF79CbdD082a078C9eA06A",
                   "owner": "0x16a4eC779ec71F9019fF79CbdD082a078C9eA06A",
@@ -102,7 +104,7 @@ describe("Uniswap V4 Indexer", { timeout: NETWORK_TIMEOUT_MS }, () => {
             },
             "block": 24240005,
             "chainId": 1,
-            "eventsProcessed": 12,
+            "eventsProcessed": 11,
           },
         ],
       }

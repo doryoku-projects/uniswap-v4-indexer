@@ -11,7 +11,7 @@
  * modifyLiquidity-handler returned ABOVE `Position.set`, so the only handler
  * still writing the row was the PositionManager `Transfer` handler — and its
  * write is `newPosition()` spread with an owner, i.e. the stub. It is permanent:
- * the fee sweep filters on `poolId !== ""` (feeSync-block.ts:292), so a stub is
+ * the fee sweep filters on `poolId !== ""` (utils/feeSweep.ts, the candidate filter), so a stub is
  * never re-read from chain either.
  *
  * Three cases, and all three matter:
@@ -283,7 +283,7 @@ describe("replayed Initialize and the Pool row", () => {
    * `if (!replayed)` and `swap-handler.ts` returns outright. Before the guard
    * this left the pool at liquidity 0 / txCount 0 permanently, with tick and
    * sqrtPrice rewound to the initialize values, feeding every position's
-   * `currentAmounts` and the fee sweep's in-range partition.
+   * `currentAmounts`, including the fee sweep's amount refresh.
    */
   it("does not zero a pool when a committed Initialize is re-delivered", async () => {
     const ix = createTestIndexer();

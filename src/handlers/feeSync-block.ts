@@ -35,42 +35,49 @@
  * handler's own block number, not from the stores" — so neither layer can use a
  * timestamp; both are block-distance tests.
  *
- * FOUR OTHER DELIBERATE DIFFERENCES FROM PONDER
+ * WHAT A FIRING DOES lives in `src/utils/feeSweep.ts` (`sweepUncollectedFees`),
+ * split out so it can be tested with a mock context — this file cannot be
+ * imported by a test, because of the top-level `await` and the registration
+ * below. This file keeps the registration, the preload early-return, the head
+ * gate and the clock. The rules a firing follows, each argued at length there:
  *
- * 1. It writes `feesUpdatedAtBlock`, never `updatedAtBlock`. Ponder stamps the
- *    single `updatedAtBlock` column on every position each cycle, and that
- *    column is what the backend's live listener watches as a change feed — so
- *    one sweep arrives downstream as the entire active set "changing" and fans
- *    out thousands of position refreshes for quantities that never moved. That
- *    is the reported hourly stall's second half, and separating the two
- *    watermarks is the fix.
+ * 1. Two watermarks. It always writes `feesUpdatedAtBlock`, and moves
+ *    `updatedAtBlock` ONLY when it heals `liquidity` / `isActive` from chain.
+ *    The backend's live listener watches `updatedAtBlock` as a change feed, so
+ *    stamping it on every refresh (what Ponder originally did, with one column
+ *    for both) presents the entire active set as "changing" every sweep and fans
+ *    out thousands of position refreshes for quantities that never moved —
+ *    that was the reported hourly stall's second half. A heal, though, IS a
+ *    position change, and the sweep used to heal silently; it no longer does.
  *
- * 2. It reads only IN-RANGE positions. An out-of-range position accrues no new
- *    fees, so its uncollected amount is exactly zero and no read is needed.
- *    Ponder applies the same rule but only AFTER reading, because it needs
- *    `getSlot0` to learn the tick. Envio has the tick from events, so the
- *    in-range set is known before any RPC and the read is proportional to it.
+ * 2. It reads EVERY candidate, in range or out. It used to read only in-range
+ *    positions and write 0/0 for the rest unread, on the claim that an
+ *    out-of-range position has exactly zero uncollected fees. That is false —
+ *    fees accrued while it was in range stay claimable after it leaves — and
+ *    was verified false on chain (mainnet tokenIds 10014, 100022).
  *
- * 3. It self-heals `liquidity` from the chain for the positions it reads, as
- *    Ponder does — but only for IN-RANGE ones, since those are the only ones it
- *    reads. See the note at the write site.
+ * 3. Uncollected = toUint256(feeGrowthInside − checkpoint) × L / 2^128, the
+ *    contract's own modular math (`utils/fees.ts`), against the checkpoint read
+ *    in the same multicall. The old negative-delta clamp zeroed the ordinary
+ *    out-of-range reading.
  *
- * 4. It is bounded per firing. Ponder selects every active position with no
- *    limit, and once one firing exceeds its interval each further interval
- *    queues another full refresh, so the lag can only grow — which is how two of
- *    its four chains ended up permanently frozen.
+ * 4. It is bounded per firing (400 positions, one multicall per 400). Ponder
+ *    originally selected every active position with no limit, and once one
+ *    firing exceeded its interval each further interval queued another full
+ *    refresh — which is how two of its four chains ended up permanently frozen.
+ *
+ * Ponder's `onFeeSync` (apps/v4/src/handlers/position-side.ts) now follows the
+ * same four rules and is the chain-verified reference for 2 and 3 (uncollected
+ * fees matched on-chain StateView math on 1,000/1,000 + 144/144 positions).
  */
 
 import { indexer } from "envio";
 
-import { getPositionFeeGrowthBatch } from "../effects/positionState";
-import { calculateUncollectedFees } from "../utils/fees";
-import { convertTokenToDecimal } from "../utils/index";
-import { currentAmounts, isDegenerate, isInRange } from "../utils/positions";
 import { v4AddressesFor } from "../utils/v4Addresses";
 import { headAtStartup, isAtChainHead } from "../utils/chainHead";
 import { feeSweepChainIds } from "../utils/v4Addresses";
 import { activeChainIds } from "../utils/chains";
+import { sweepUncollectedFees } from "../utils/feeSweep";
 
 /**
  * Blocks between sweeps, per chain — every chain targets **45 minutes**.
@@ -116,20 +123,8 @@ const SWEEP_INTERVAL_BLOCKS: Readonly<Record<number, number>> = {
   7777777: 1350, // zora ~2.0s -> 45 min
 };
 
-/**
- * Positions per firing, and per multicall.
- *
- * The cap is the whole point: it makes a firing's cost bounded rather than
- * proportional to the position count, so a sweep can never take longer than its
- * own interval and start compounding.
- *
- * `SWEEP_CHUNK` mirrors Ponder's `refreshChunk` (400): one Multicall3 request
- * carries a whole chunk, so the request count is positions/400 rather than
- * positions. Reading one position per request — which this handler did before —
- * multiplied node load by 400 for identical data.
- */
-const SWEEP_BATCH_SIZE = 400;
-const SWEEP_CHUNK = 400;
+// The per-firing cap and the multicall chunk size (`SWEEP_BATCH_SIZE`,
+// `SWEEP_CHUNK`) live with the sweep body in `src/utils/feeSweep.ts`.
 
 /*
  * The chain heads as of process start, used as a `_gte` floor below.
@@ -209,10 +204,12 @@ indexer.onBlock(
      * The `cache` flag controls DB persistence, not that dict.
      *
      * THE REAL REASON, which does hold: the memo is keyed on the effect INPUT,
-     * and this effect's input is the `positions` ARRAY assembled below. Its
-     * membership is derived from a `Position.getWhere` on `feesUpdatedAtBlock`
-     * plus an in-range partition — state the preload pass cannot have settled,
-     * since its own writes are discarded — so the two passes would in general
+     * and this effect's input is the `positions` ARRAY assembled by
+     * `sweepUncollectedFees`. Its membership is derived from a
+     * `Position.getWhere` on `feesUpdatedAtBlock` plus the pool/token lookups —
+     * state the preload pass cannot have settled, since its own writes are
+     * discarded (an earlier batch's events can move rows in or out of the stale
+     * set and of the active filter) — so the two passes would in general
      * build DIFFERENT arrays, produce different keys, and miss the memo
      * entirely. A warm-up that cannot be hit is a whole extra multicall per
      * firing, so returning early halves the sweep's node load.
@@ -262,202 +259,31 @@ indexer.onBlock(
      *
      * The port previously wrote `position.feesUpdatedAtTimestamp` here, i.e. the
      * row's own previous value, which left it permanently 0.
+     *
+     * The same clock stamps `updatedAtTimestamp` on a HEALED row, alongside
+     * `updatedAtBlock` = this block. Every other writer of that pair uses the
+     * event's block timestamp; this is the one writer that has none, so on a
+     * healed row the timestamp is "when the sweep saw it", and the block number
+     * is the authoritative half.
      */
     const sweptAt = BigInt(Math.floor(Date.now() / 1000));
 
-    // Ask for the positions this cycle has not refreshed, rather than reading
-    // every active position and sorting in memory. `feesUpdatedAtBlock` is
-    // indexed for exactly this query, which is what keeps the working set
-    // bounded — Ponder's unbounded `select ... where isActive` is the reason one
-    // slow firing there compounds into a permanent stall.
-    // `_lte`, not `_lt`: consecutive `_every` firings are exactly `interval`
-    // apart, so a row stamped at the previous firing has
-    // `feesUpdatedAtBlock === blockNumber - interval` exactly. Under `_lt` it
-    // misses by one and waits a further full interval, halving the real refresh
-    // cadence relative to the one configured above.
-    const cutoff = blockNumber - interval;
-    const stale = await context.Position.getWhere({
-      chainId: { _eq: BigInt(chainId) },
-      feesUpdatedAtBlock: { _lte: cutoff < 0n ? 0n : cutoff },
+    const summary = await sweepUncollectedFees(context, {
+      chainId,
+      blockNumber,
+      interval,
+      sweptAt,
+      addresses,
     });
+    if (summary.candidates === 0) return;
 
-    // A position with no liquidity earns nothing, and one with no pool has not
-    // seen its first ModifyLiquidity yet.
-    //
-    // Sorted explicitly by watermark. `getWhere` gives no ordering guarantee, so
-    // the "oldest fee-read first" rotation this cap depends on is not free: an
-    // arbitrary order can re-pick the same 400 rows every firing and starve the
-    // rest indefinitely.
-    const candidates = stale
-      .filter((p) => p.isActive && p.liquidity > 0n && p.poolId !== "")
-      .sort((a, b) => (a.feesUpdatedAtBlock < b.feesUpdatedAtBlock ? -1 : a.feesUpdatedAtBlock > b.feesUpdatedAtBlock ? 1 : 0))
-      .slice(0, SWEEP_BATCH_SIZE);
-
-    if (candidates.length === 0) return;
-
-    // Partition before any RPC: an out-of-range position provably has zero
-    // uncollected fees, so it needs no read at all.
-    const toRead: typeof candidates = [];
-    let zeroed = 0;
-    let skipped = 0;
-
-    for (const position of candidates) {
-      const pool = await context.Pool.get(`${chainId}_${position.poolId}`);
-      if (!pool) {
-        skipped += 1;
-        continue;
-      }
-      const poolTick = pool.tick ?? 0n;
-
-      if (!isInRange(position.tickLower, position.tickUpper, poolTick)) {
-        zeroed += 1;
-        context.Position.set({
-          ...position,
-          totalFeesUncollected0: convertTokenToDecimal(0n, 0n),
-          totalFeesUncollected1: convertTokenToDecimal(0n, 0n),
-          feesUpdatedAtBlock: blockNumber,
-          feesUpdatedAtTimestamp: sweptAt,
-        });
-        continue;
-      }
-      toRead.push(position);
-    }
-
-    // One Multicall3 per chunk, as Ponder does.
-    let read = 0;
-    let failed = 0;
-
-    for (let start = 0; start < toRead.length; start += SWEEP_CHUNK) {
-      const chunk = toRead.slice(start, start + SWEEP_CHUNK);
-      const states = await context.effect(getPositionFeeGrowthBatch, {
-        stateView: addresses.stateView,
-        positionManager: addresses.positionManager,
-        multicall3: addresses.multicall3,
-        blockNumber,
-        positions: chunk.map((p) => ({
-          tokenId: p.tokenId,
-          poolId: p.poolId,
-          tickLower: Number(p.tickLower),
-          tickUpper: Number(p.tickUpper),
-        })),
-      });
-
-      const byTokenId = new Map(states.map((s) => [s.tokenId, s]));
-
-      for (const position of chunk) {
-        const state = byTokenId.get(position.tokenId);
-        const pool = await context.Pool.get(`${chainId}_${position.poolId}`);
-        if (!pool) {
-          skipped += 1;
-          continue;
-        }
-        const token0 = await context.Token.get(pool.token0);
-        const token1 = await context.Token.get(pool.token1);
-        if (!token0 || !token1) {
-          skipped += 1;
-          continue;
-        }
-
-        // A failed read keeps the previous uncollected value — a stale fee is
-        // recoverable, a fabricated zero is not distinguishable from a real one.
-        //
-        // But the watermark IS stamped either way, which is Ponder's behaviour:
-        // its per-position write is unconditional and falls back to the stored
-        // liquidity when the call failed. Skipping the write instead leaves the
-        // row below the cutoff forever, so a persistently failing read re-selects
-        // the same positions on every firing and the stale set can only grow —
-        // which is exactly what a broken multicall produced here.
-        if (!state || !state.ok) {
-          failed += 1;
-          context.Position.set({
-            ...position,
-            feesUpdatedAtBlock: blockNumber,
-            feesUpdatedAtTimestamp: sweptAt,
-          });
-          continue;
-        }
-        read += 1;
-
-        const uncollected = calculateUncollectedFees(
-          // The on-chain liquidity, not our running sum: if they disagree, the
-          // contract is right and the fee must be computed against its value.
-          state.liquidity,
-          state.feeGrowthInside0X128,
-          state.feeGrowthInside1X128,
-          state.feeGrowthInside0LastX128,
-          state.feeGrowthInside1LastX128,
-        );
-
-        // Refresh the pooled amounts too. Ponder recomputes these every sweep
-        // from live slot0, because a position's token split moves with the pool
-        // price even when the position itself never changes. Computing them only
-        // on ModifyLiquidity leaves them frozen at the last liquidity event.
-        // The tick here is event-maintained rather than read, so this costs no
-        // RPC — and it is guarded by the same degenerate-pool check Ponder
-        // applies, since tick math at the domain edges produces garbage.
-        const poolTick = pool.tick ?? 0n;
-        const degenerate = isDegenerate(poolTick, pool.sqrtPrice);
-        const amounts = degenerate
-          ? { amount0: position.amount0, amount1: position.amount1 }
-          : currentAmounts({
-              tickLower: position.tickLower,
-              tickUpper: position.tickUpper,
-              liquidity: state.liquidity,
-              pool: { tick: poolTick, sqrtPriceX96: pool.sqrtPrice },
-              decimals0: token0.decimals,
-              decimals1: token1.decimals,
-            });
-
-        /*
-         * SELF-HEAL from the chain, which Ponder does on every sweep.
-         *
-         * `position.liquidity` is a running sum of `liquidityDelta` over the
-         * events we saw; `state.liquidity` is what the contract holds right now.
-         * They should be equal, and if they are not the contract is right —
-         * Ponder writes the on-chain value unconditionally
-         * (apps/v4/src/index.ts:452-459) precisely so a missed or out-of-order
-         * event heals on the next cycle instead of drifting forever.
-         *
-         * LIMIT, STATED HONESTLY: this port only reads IN-RANGE positions (that
-         * is what makes the sweep cheap), so only they are healed. An
-         * out-of-range position keeps its running sum until it comes back into
-         * range. Ponder pays an RPC per active position to cover both; the
-         * trade is deliberate, not an oversight.
-         */
-        const healedLiquidity = state.liquidity;
-        const nowActive = healedLiquidity > 0n;
-
-        context.Position.set({
-          ...position,
-          liquidity: healedLiquidity,
-          isActive: nowActive,
-          // Closing and reopening, mirroring Ponder's two branches: stamp on the
-          // transition to zero, preserve an existing close time, and CLEAR it
-          // when liquidity returns so a reopened position is not left looking
-          // closed.
-          closedAtTimestamp: nowActive
-            ? undefined
-            : (position.closedAtTimestamp ?? sweptAt),
-          totalFeesUncollected0: convertTokenToDecimal(uncollected.amount0, token0.decimals),
-          totalFeesUncollected1: convertTokenToDecimal(uncollected.amount1, token1.decimals),
-          amount0: amounts.amount0,
-          amount1: amounts.amount1,
-          // Re-baseline to the contract's stored last, so accrual resumes
-          // cleanly on range re-entry. Ponder does this on both branches; the
-          // port previously never wrote these at all, which left the baseline
-          // permanently zero and the trace gate unable to detect a settle.
-          feeGrowthInside0LastX128: state.feeGrowthInside0LastX128,
-          feeGrowthInside1LastX128: state.feeGrowthInside1LastX128,
-          // ONLY the fee watermark. `updatedAtBlock` is untouched on purpose.
-          feesUpdatedAtBlock: blockNumber,
-          feesUpdatedAtTimestamp: sweptAt,
-        });
-      }
-    }
-
+    // `outOfRange` counts positions READ while out of range — rows the sweep used
+    // to zero unread. `healed` counts liquidity/isActive corrections, the only
+    // writes that move `updatedAtBlock`.
     context.log.info(
-      `feeSync chain=${chainId} block=${block.number} candidates=${candidates.length} ` +
-        `read=${read} failed=${failed} zeroed-out-of-range=${zeroed} skipped=${skipped}`,
+      `feeSync chain=${chainId} block=${block.number} candidates=${summary.candidates} ` +
+        `read=${summary.read} out-of-range=${summary.outOfRange} failed=${summary.failed} ` +
+        `healed=${summary.healed} skipped=${summary.skipped}`,
     );
   },
 );

@@ -1,12 +1,17 @@
 import { BigDecimal } from "envio";
-import { ZERO_BD, ONE_BD, ZERO_BI } from "./constants";
+import { ZERO_BD } from "./constants";
 
 /*
- * MEMOISED. The body builds a string in a loop and parses it, and the pricing
- * path calls it four times per Swap event — for one of only ~19 distinct inputs
- * (the decimals of the tokens actually indexed). Caching turns a per-event
- * string build into a Map hit. `BigDecimal` is bignumber.js and immutable, so
- * sharing an instance across callers is safe.
+ * MEMOISED. The body builds a string in a loop and parses it, and it used to be
+ * called four times per Swap event (sqrtPriceX96ToTokenPrices and
+ * convertTokenToDecimal) — for one of only ~19 distinct inputs (the decimals of
+ * the tokens actually indexed). Caching turns a string build into a Map hit.
+ * `BigDecimal` is bignumber.js and immutable, so sharing an instance across
+ * callers is safe.
+ *
+ * NO LONGER ON THE PRICING PATH: dividing by this rounds to 20 dp, which is the
+ * precision bug `ratioToBigDecimal` / `shiftedBy` replaced. Multiplying by it is
+ * exact; dividing by it is not — prefer `shiftedBy(-decimals)`.
  */
 const exponentCache = new Map<bigint, BigDecimal>();
 
@@ -71,44 +76,80 @@ export function hexToBigInt(hex: string): bigint {
   return BigInt(`0x${hex}`);
 }
 
-/**
- * Implements exponentiation by squaring
- * (see https://en.wikipedia.org/wiki/Exponentiation_by_squaring )
- * to minimize the number of BigDecimal operations and their impact on performance.
- *
- * Uses Math.floor for correct integer division and caps intermediate precision
- * at 40 digits to prevent BigDecimal digit explosion during squaring steps
- * (without capping, 18 squaring levels would produce ~1M digit intermediates).
+/*
+ * MEMOISED 10^n as a bigint. `ratioToBigDecimal` scales by one of these on
+ * every call (twice per Swap via sqrtPriceX96ToTokenPrices), and the exponents
+ * that occur are few — they follow the decimals of the indexed tokens and the
+ * magnitude of the price — so a Map hit replaces a bigint exponentiation.
  */
-export function fastExponentiation(
-  value: BigDecimal,
-  power: number
-): BigDecimal {
-  if (power < 0) {
-    const result = fastExponentiation(value, -power);
-    return safeDiv(ONE_BD, result);
-  }
+const pow10Cache = new Map<number, bigint>();
 
-  if (power == 0) {
-    return ONE_BD;
-  }
-
-  if (power == 1) {
-    return value;
-  }
-
-  const halfPower = Math.floor(power / 2);
-  const halfResult = fastExponentiation(value, halfPower);
-
-  // Use the fact that x ^ (2n) = (x ^ n) * (x ^ n) and we can compute (x ^ n) only once.
-  // Cap precision after each multiplication to prevent digit explosion.
-  let result = new BigDecimal(halfResult.times(halfResult).toFixed(40));
-
-  // For odd powers, x ^ (2n + 1) = (x ^ 2n) * x
-  if (power % 2 == 1) {
-    result = new BigDecimal(result.times(value).toFixed(40));
-  }
+function pow10(n: number): bigint {
+  const hit = pow10Cache.get(n);
+  if (hit !== undefined) return hit;
+  const result = BigInt(10) ** BigInt(n);
+  pow10Cache.set(n, result);
   return result;
+}
+
+/**
+ * The EXACT rational `num / den`, rounded ROUND_HALF_UP to `significantDigits`
+ * significant digits (default 40).
+ *
+ * WHY THIS EXISTS. `BigDecimal` is bignumber.js on its default config —
+ * DECIMAL_PLACES = 20, ROUND_HALF_UP — so every `.div` rounds to 20 FIXED
+ * decimal places. That is harmless for a USD total and fatal for a price: a
+ * quotient below 1e-20 becomes exactly 0, and one just above it keeps a digit
+ * or two. Routing `sqrtPriceX96² / 2^192` and `1.0001^tick` through `.div`
+ * zeroed the prices of 430 active pools on mainnet (cheap tokens, and tokens
+ * with far more decimals than their pair, e.g. 18 vs 6 or 27 vs 6) and skewed
+ * others (NAVI/USDC by 0.19%) — and those prices feed derivedETH, hence every
+ * USD figure, plus the Pool/Tick/interval price columns.
+ *
+ * HOW. Everything is bigint arithmetic, so the quotient is exact until the
+ * single final rounding; the rounded digits are built as a bigint and placed
+ * with `shiftedBy`, which is exact too. The value NEVER passes through a
+ * bignumber `.div`. Precision is RELATIVE — 40 significant digits whether the
+ * price is 3e38 or 3e-39 — rather than a fixed number of decimal places.
+ *
+ * Rounding is on the magnitude with the sign applied afterwards, i.e. half away
+ * from zero: exactly bignumber's ROUND_HALF_UP. `num == 0` gives 0, and so does
+ * `den == 0` (mirroring `safeDiv`, so a degenerate input zeroes a price instead
+ * of throwing inside a handler).
+ */
+export function ratioToBigDecimal(
+  num: bigint,
+  den: bigint,
+  significantDigits = 40
+): BigDecimal {
+  if (!Number.isInteger(significantDigits) || significantDigits < 1) {
+    throw new RangeError(
+      `ratioToBigDecimal: significantDigits must be a positive integer, got ${significantDigits}`
+    );
+  }
+  if (num === BigInt(0) || den === BigInt(0)) return ZERO_BD;
+
+  const negative = num < BigInt(0) !== den < BigInt(0);
+  const a = num < BigInt(0) ? -num : num;
+  const b = den < BigInt(0) ? -den : den;
+
+  // e = floor(log10(a / b)), the decimal exponent of the leading digit. With
+  // la/lb the digit counts, a/b lies in (10^(la-lb-1), 10^(la-lb+1)), so e is
+  // la-lb or one less; a single exact comparison decides which.
+  let e = a.toString().length - b.toString().length;
+  if (e >= 0 ? a < b * pow10(e) : a * pow10(-e) < b) e -= 1;
+
+  // Scale so the integer quotient has exactly `significantDigits` digits:
+  // value = q * 10^-k with 10^(sd-1) <= q < 10^sd before rounding.
+  const k = significantDigits - 1 - e;
+  const n = k >= 0 ? a * pow10(k) : a;
+  const d = k >= 0 ? b : b * pow10(-k);
+  let q = n / d;
+  // ROUND_HALF_UP on the magnitude. A carry (9.99…5 -> 10.00…) just yields
+  // 10^sd, which is still the correctly rounded value.
+  if ((n - q * d) * BigInt(2) >= d) q += BigInt(1);
+
+  return new BigDecimal((negative ? "-" : "") + q.toString()).shiftedBy(-k);
 }
 
 const NULL_ETH_HEX_STRING =
@@ -118,14 +159,22 @@ export function isNullEthValue(value: string): boolean {
   return value == NULL_ETH_HEX_STRING;
 }
 
+/*
+ * Raw token units -> human units, EXACTLY.
+ *
+ * This used to be `.div(exponentToBigDecimal(decimals))`, and bignumber's `.div`
+ * rounds to 20 decimal places (see `ratioToBigDecimal`), so a token with more
+ * than 20 decimals (27-decimal ctUSDe, for one) lost its low digits — and an
+ * amount below 1e-20 tokens became 0. `shiftedBy(-decimals)` moves the decimal
+ * point without rounding. For decimals <= 20 the quotient always fit in 20 dp,
+ * so results there are identical to the old ones (pinned in
+ * test/precision.test.ts); decimals 0 needs no special case.
+ */
 export function convertTokenToDecimal(
   tokenAmount: bigint,
   exchangeDecimals: bigint
 ): BigDecimal {
-  if (exchangeDecimals == ZERO_BI) {
-    return new BigDecimal(tokenAmount.toString());
-  }
-  return new BigDecimal(tokenAmount.toString()).div(
-    exponentToBigDecimal(exchangeDecimals)
+  return new BigDecimal(tokenAmount.toString()).shiftedBy(
+    -Number(exchangeDecimals)
   );
 }

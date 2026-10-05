@@ -187,25 +187,39 @@ indexer.onEvent({ contract: "PoolManager", event: "Swap" }, async ({ event, cont
   );
   const amountTotalUSDUntracked = amount0USD.plus(amount1USD).div(BD_TWO);
   /*
-   * `pool.feeTier.toString()` ran FIVE times here and `new BigDecimal("1000000")`
-   * was constructed five more, every swap event. Both are loop-invariant: the fee
-   * tier is one field read and the divisor is a constant. Hoisted — identical
-   * values, same order of operations, one allocation instead of ten.
+   * THIS SWAP'S OWN FEE — `event.params.fee` — prices this swap's fees.
+   *
+   * It used to be `pool.feeTier`, i.e. the STORED value, which this handler
+   * only overwrites with `event.params.fee` further down. So every swap was
+   * charged the PREVIOUS swap's rate: on a dynamic-fee pool each swap carried
+   * its predecessor's fee, and the FIRST swap of a dynamic-fee pool carried the
+   * Initialize value — the 0x800000 (8,388,608) dynamic-fee flag, i.e. fees of
+   * ~8.39x the swap's volume. Static-fee pools were unaffected only while the
+   * event fee happened to equal the stored one (a protocol fee changes the
+   * event's `swapFee`, too). Ponder's `swapPricing` prices with the event fee for the
+   * same reason (core/pricing.ts, "decision (a)").
+   *
+   * `pool.feeTier` itself keeps its meaning — it is still overwritten with the
+   * event fee below, so it reads as "the most recent swap's fee".
+   *
+   * Hoisted, as before: one BigDecimal for the fee and the module-scope
+   * divisor, instead of five constructions of each per event.
    */
-  const feeTierBD = new BigDecimal(pool.feeTier.toString());
-  const feeRate = feeTierBD.div(BD_ONE_MILLION);
+  const swapFeeBD = new BigDecimal(event.params.fee.toString());
+  const feeRate = swapFeeBD.div(BD_ONE_MILLION);
   // Calculate fees
-  const feesETH = amountTotalETHTracked.times(feeTierBD).div(BD_ONE_MILLION);
-  const feesUSD = amountTotalUSDTracked.times(feeTierBD).div(BD_ONE_MILLION);
+  const feesETH = amountTotalETHTracked.times(swapFeeBD).div(BD_ONE_MILLION);
+  const feesUSD = amountTotalUSDTracked.times(swapFeeBD).div(BD_ONE_MILLION);
   // Calculate untracked fees
   const feesUSDUntracked = amountTotalUSDUntracked.times(feeRate);
   // Calculate collected fees in tokens
-  const feesToken0 = amount0Abs.times(feeTierBD).div(BD_ONE_MILLION);
-  const feesToken1 = amount1Abs.times(feeTierBD).div(BD_ONE_MILLION);
+  const feesToken0 = amount0Abs.times(swapFeeBD).div(BD_ONE_MILLION);
+  const feesToken1 = amount1Abs.times(swapFeeBD).div(BD_ONE_MILLION);
   // Store current pool TVL values for later calculations
   const currentPoolTvlETH = pool.totalValueLockedETH;
   const currentPoolTvlUSD = pool.totalValueLockedUSD;
-  // Update pool values (feeTier updated to actual swap fee for dynamic fee pools)
+  // Update pool values (feeTier updated to actual swap fee for dynamic fee
+  // pools — AFTER the fees above were priced with that same event fee)
   pool = {
     ...pool,
     feeTier: BigInt(event.params.fee),

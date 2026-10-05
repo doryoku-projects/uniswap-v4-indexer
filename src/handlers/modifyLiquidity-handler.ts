@@ -275,7 +275,7 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
    * (e.g. `8453_4032`) frozen as that stub, each with a CORRECT
    * `ModifyLiquidity` + `PositionTransaction` ledger behind it, and each one
    * permanent — the fee sweep filters on `poolId !== ""`
-   * (feeSync-block.ts:292), so a stub is never re-read from chain either.
+   * (utils/feeSweep.ts, the candidate filter), so a stub is never re-read from chain either.
    *
    * So the replay now skips the accumulators it cannot reason about and RUNS
    * ON to the position block, which CAN reason about itself: `lastModifyBlock`
@@ -834,10 +834,16 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
      *
      * WHAT THIS READ IS STILL FOR, now that it no longer gates the trace. It
      * feeds `feeGrowthInside0/1LastX128` on the Position row, which the schema
-     * exposes and the head sweep diffs against to value UNCOLLECTED fees. What
-     * it must never again do is decide whether a COLLECTED fee gets measured:
-     * it is a pool-level, end-of-block number, and the fee it was being used to
-     * predict is set by the position's own mid-transaction checkpoint.
+     * exposes. The head sweep does NOT diff against that column: it values
+     * UNCOLLECTED fees against the contract's own checkpoint
+     * (`getPositionInfo`), read in the same multicall as `getFeeGrowthInside`,
+     * and then overwrites the column with it — the modular math in
+     * `utils/fees.ts` is only exact against that checkpoint, and diffing it
+     * mod 2^256 against this pool-level value could manufacture a ~2^256 fee.
+     * What this read must never again do is decide whether a COLLECTED fee
+     * gets measured: it is a pool-level, end-of-block number, and the fee it was
+     * being used to predict is set by the position's own mid-transaction
+     * checkpoint.
      */
     const fgNow = await readFeeGrowthInside(context, feeGateEvent);
 

@@ -45,8 +45,8 @@ indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event
    * this handler just zeroed. `tick`, `sqrtPrice` and `liquidity` do recover —
    * `swap-handler.ts` ASSIGNS all three from event params, so the first Swap
    * after the replay window heals them, and until it arrives the rewound values
-   * feed `currentAmounts` for every position in the pool and the fee sweep's
-   * in-range partition. Permanently lost are the accumulated fields the same
+   * feed `currentAmounts` for every position in the pool, including the fee
+   * sweep's amount refresh. Permanently lost are the accumulated fields the same
    * write leaves untouched: `txCount`, `volumeToken0/1`, `volumeUSD`, `feesUSD`,
    * `collectedFees*`, `totalValueLocked*`, `liquidityProviderCount`.
    *

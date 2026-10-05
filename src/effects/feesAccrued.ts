@@ -249,10 +249,34 @@ export interface ModifyFrame {
   readonly amount1: bigint;
 }
 
-/** Every PoolManager.modifyLiquidity frame with a complete BalanceDelta output. */
+/**
+ * Every PoolManager.modifyLiquidity frame with a complete BalanceDelta output
+ * that SURVIVED — i.e. is not inside a reverted subtree.
+ *
+ * A REVERTED SUBTREE IS SKIPPED WHOLE, NOT JUST ITS ROOT. callTracer marks a
+ * frame that reverted with `error`, and a revert discards every log emitted by
+ * that frame AND by everything beneath it — so neither the reverted frame nor
+ * any `modifyLiquidity` call nested under it has a surviving ModifyLiquidity
+ * log to pair with. This used to keep them. Each one then occupied an ordinal
+ * no event would ever claim, shifting every LATER same-salt frame by one: the
+ * next event paired with the phantom (the reverted attempt's fees) and every
+ * later one with its predecessor's frame — and the integrity check cannot catch
+ * it when the neighbouring frames have equal ticks and delta (the `[0, 0]`
+ * settlement shape). A reverted frame can sit anywhere in a successful
+ * transaction: a router's try/catch, a hook, a multicall with `allowFailure`.
+ * The top-level-revert case is still handled by the caller's `!trace?.error`
+ * check, and now also falls out here as zero frames.
+ *
+ * FRAMES FROM ANY CALLER ARE STILL KEPT, deliberately. The event-side ordinal
+ * (`saltOrdinal`) counts same-salt ModifyLiquidity rows of ANY sender, so the
+ * frame side must count frames of any caller for the two sequences to line
+ * up. (Ponder filters frames to the PositionManager only because ITS event-side
+ * ordinal counts PositionManager events only; the two populations must match,
+ * not the filter.)
+ */
 function collectModifyCalls(node: TraceNode | undefined, acc: TraceNode[], poolManager: string): void {
+  if (!node || node.error) return;
   if (
-    node &&
     typeof node.to === "string" &&
     node.to.toLowerCase() === poolManager &&
     typeof node.input === "string" &&
@@ -263,7 +287,7 @@ function collectModifyCalls(node: TraceNode | undefined, acc: TraceNode[], poolM
   ) {
     acc.push(node);
   }
-  for (const c of node?.calls ?? []) collectModifyCalls(c, acc, poolManager);
+  for (const c of node.calls ?? []) collectModifyCalls(c, acc, poolManager);
 }
 
 /**
@@ -278,6 +302,10 @@ function collectModifyCalls(node: TraceNode | undefined, acc: TraceNode[], poolM
  * ModifyLiquidity LOG is the k-th same-salt frame — verified across all 2,062
  * Avalanche settlement transactions, matching on (tickLower, tickUpper,
  * liquidityDelta, salt), 2062/2062 with zero exceptions.
+ *
+ * A frame inside a REVERTED subtree is skipped together with that whole
+ * subtree (see `collectModifyCalls`), so the ordinals come out exactly as if
+ * the reverted calls never happened — which is what the surviving logs say.
  *
  * A frame whose calldata will not decode is SKIPPED, which shifts the ordinals
  * of later same-salt frames. It cannot be counted instead: a frame with no
@@ -350,6 +378,16 @@ function traceClient(chainId: number): PublicClient {
  * catches the schema error, calls `recordInvalidation`, logs "Invalidated effect
  * cache" at trace level, and the input falls through to a fresh trace. So rows
  * written before `ordinal` existed are re-traced rather than mis-read.
+ *
+ * THE CONVERSE ALSO HOLDS, AND IT BITES ONCE. A fix to the DECODE that leaves
+ * this shape alone invalidates nothing. Rows persisted before reverted
+ * subtrees were skipped (`collectModifyCalls`) still carry those phantom
+ * frames, still parse, and are still served on a resync. Only transactions
+ * that contain a reverted `modifyLiquidity` frame inside a successful call are
+ * affected — rare, but a resync that must be exact needs those rows purged from
+ * `envio_<chainId>_effect_getFeesAccrued` first (the committed `.envio/cache`
+ * TSVs were empty when this changed). Re-tracing everything by changing this
+ * schema would cost the whole cache to fix a handful of rows.
  */
 const FeesBySalt = S.array(
   S.schema({

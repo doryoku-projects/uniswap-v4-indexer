@@ -136,13 +136,15 @@ export function currentAmounts(args: {
 }
 
 /**
- * Is a position in range, i.e. can it accrue new fees?
+ * Is a position in range, i.e. is it accruing NEW fees right now?
  *
- * Worth having as its own function: an out-of-range position's uncollected fees
- * are exactly zero, so the fee sweep can skip it entirely. Ponder knows this too
- * but cannot act on it before reading, because it needs `getSlot0` to learn the
- * tick. Here the tick is already known, which is what lets the sweep read only
- * the positions that can actually have changed.
+ * NOT "does it have uncollected fees". This used to gate the fee sweep on the
+ * claim that an out-of-range position's uncollected fees are exactly zero, so
+ * it could be zeroed without a read. That is false: fees accrued while it was
+ * in range stay claimable after it leaves, and the contract's modular math pays
+ * them out (verified on chain, mainnet tokenIds 10014 and 100022). The sweep
+ * now reads every candidate and uses this only to COUNT out-of-range reads in
+ * its log line (`utils/feeSweep.ts`). Do not re-introduce it as a read skip.
  */
 export function isInRange(tickLower: bigint, tickUpper: bigint, poolTick: bigint): boolean {
   return poolTick >= tickLower && poolTick < tickUpper;

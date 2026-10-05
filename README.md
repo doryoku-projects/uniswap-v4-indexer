@@ -239,14 +239,17 @@ none of this can exist. The field was always delivered and never read.
 
 **`amount0`/`amount1` need no `eth_call`.** They are pure math over
 `(ticks, pool.tick, liquidity, pool.sqrtPrice)`, and the tick comes from `Initialize`/`Swap` — in
-v4 only a swap moves it, so the event-tracked value equals on-chain slot0. Ponder spends a
-`getSlot0` per refresh cycle on this. It also means the in-range set is known for free, so the fee
-sweep reads only positions that can actually have accrued.
+v4 only a swap moves it, so the event-tracked value equals on-chain slot0. Ponder originally spent
+a `getSlot0` per refresh cycle on this. (An earlier version of this paragraph went on to say the
+sweep could therefore read only in-range positions. That was wrong — see "Five more defects"
+below — and the sweep now reads every candidate.)
 
-**`updatedAtBlock` and `feesUpdatedAtBlock` are separate on purpose.** Ponder has one column for
-both, and because the backend watches it as a change feed, every fee sweep there presents the whole
-active set as changed and triggers thousands of pointless refreshes. The fee sweep here writes only
-the fee watermark. A THIRD watermark, `lastModifyBlock`/`lastModifyLogIndex`, is written by
+**`updatedAtBlock` and `feesUpdatedAtBlock` are separate on purpose.** Ponder originally had one
+column for both, and because the backend watches it as a change feed, every fee sweep there
+presented the whole active set as changed and triggered thousands of pointless refreshes. The fee
+sweep here always writes the fee watermark and moves `updatedAtBlock` ONLY when it heals
+`liquidity`/`isActive` from chain — a heal is a real position change; a fee or price refresh is
+not. A THIRD watermark, `lastModifyBlock`/`lastModifyLogIndex`, is written by
 `modifyLiquidity-handler` alone and says which liquidity event the row's running sums contain — see
 "Replaying a committed range" below for what it is for.
 
@@ -476,9 +479,9 @@ it broke the invariant that the aggregate equals the sum of the position's own r
 **The sweep never wrote `liquidity` back.** Ponder writes the on-chain value every cycle
 (apps/v4/src/index.ts:452-459) so a missed or out-of-order event heals instead of drifting
 forever; the port used the on-chain value for the fee math and then discarded it. Now written,
-along with `isActive` and the close/reopen handling — but only for IN-RANGE positions, because
-those are the only ones this sweep reads. Ponder pays an RPC per active position to cover both;
-that trade is deliberate and is stated at the write site rather than left implicit.
+along with `isActive` and the close/reopen handling. It was at first limited to IN-RANGE
+positions, the only ones the sweep then read; that limit went away with the in-range partition
+(see "Five more defects" below), so every candidate heals — and a heal now moves `updatedAtBlock`.
 
 Smaller parity gaps closed at the same time: transaction gas is charged once per transaction
 rather than to every position it touches; negative running liquidity is clamped and warned
@@ -644,8 +647,9 @@ BOTH same-salt events trace, so first-wins attributes the same fee TWICE. Keying
 two frames identical in salt + ticks + delta.
 
 **So the pairing is ORDINAL** (`src/utils/feeFrames.ts`). `framesFromTrace`
-(`src/effects/feesAccrued.ts`) stamps every `modifyLiquidity` frame with its 0-based index among
-frames of the same salt, in execution order; the handler derives the same ordinal for its own
+(`src/effects/feesAccrued.ts`) stamps every SURVIVING `modifyLiquidity` frame — reverted subtrees
+are skipped, see "Five more defects" below — with its 0-based index among frames of the same salt,
+in execution order; the handler derives the same ordinal for its own
 event and pairs on it. This is sound because the k-th same-salt LOG is the k-th same-salt call
 FRAME — verified on all 2,062 settlement transactions, matching on
 `(tickLower, tickUpper, liquidityDelta, salt)`, **2062/2062, zero exceptions**.
@@ -728,6 +732,75 @@ wrong number. A parity failure on a settlement is now the EXPECTED result and th
 fix working. `scripts/diff-collected-fees.mjs` should be read with that in mind: this port
 reporting MORE collected fees than Ponder is the classifier's existing "Ponder LOW" case and
 remains correct.
+
+### Five more defects, found by checking BOTH indexers against chain math
+
+Comparing against Ponder could not catch these: its Envio-parity port reproduced the same
+behaviour, so the two agreed on the wrong numbers. That port then fixed them first and verified the
+result against on-chain StateView math — uncollected fees 1,000/1,000 + 144/144 positions and
+collected fees 735/735 + 77/77 across Arbitrum, mainnet and Optimism windows — and this repo now
+carries the same semantics. Each produced a plausible number, not an error.
+
+**Uncollected fees: a clamp that zeroed the ordinary out-of-range reading.**
+`calculateUncollectedFees` (`src/utils/fees.ts`) clamped a negative `feeGrowthInside − last` to 0.
+The contract computes `FullMath.mulDiv(feeGrowthInside − feeGrowthInsideLast, liquidity, 2^128)`
+inside `unchecked`, so the subtraction wraps mod 2^256, and `feeGrowthInside` is itself composed
+with unchecked subtraction — out of range it routinely reads near 2^256. A difference that looks
+negative is an ordinary positive amount mod 2^256. The formula is now
+`toUint256(inside − last) × L / 2^128`, floor, no clamp, no cap, `L <= 0` → 0. Its caller contract
+is load-bearing: `last` MUST be the contract's checkpoint (`getPositionInfo`) read at the same
+block as `getFeeGrowthInside`. The Position row's `feeGrowthInside*LastX128` written by
+`modifyLiquidity-handler` is a pool-level end-of-block read, NOT that checkpoint, and diffing
+against it mod 2^256 could invent a ~2^256 fee — the sweep never does.
+
+**The sweep zeroed every out-of-range position without reading it.** It partitioned candidates
+by `isInRange` and wrote 0/0 for the rest, on the claim that an out-of-range position has nothing
+to collect. Fees accrued while in range stay claimable after it leaves: mainnet tokenIds 10014 and
+100022 were out of range with claimable fees and served here as 0. The zeroed path also never
+refreshed their `amount0/1` or healed their liquidity. The sweep body now lives in
+`src/utils/feeSweep.ts` (testable with a mock context; the handler file cannot be imported by a
+test) and reads EVERY candidate with the same 400-row cap, the same one-multicall-per-400 chunking,
+the same failed-read handling (watermark only) and the same degenerate-pool amount guard. A firing
+processes the same number of rows as before — out-of-range rows were already stamped — and the
+widest multicall is unchanged (400 positions was always possible); only the share of rows that
+costs a read grew. The log line reports `out-of-range=` (rows read while out of range) and
+`healed=` in place of `zeroed-out-of-range=`.
+
+**The sweep healed rows without telling the change feed.** It corrected `liquidity`/`isActive`
+from chain but never moved `updatedAtBlock`, so the backend kept serving the stale liquidity until
+an unrelated event touched the row. A heal now sets `updatedAtBlock` to the sweep block and
+`updatedAtTimestamp` to the sweep's wall clock (a block handler has no block timestamp). A plain
+fee or price refresh still does not move it, which is the reason the two watermarks exist.
+
+**Reverted call frames shifted the collected-fee ordinals.** `collectModifyCalls` kept
+`modifyLiquidity` frames from reverted calls. A revert discards every log of that frame and its
+whole subtree, so none of them has a surviving `ModifyLiquidity` event to pair with; keeping them
+gave each a phantom ordinal, so the next same-salt event paired with the phantom (the reverted
+attempt's fees) and every later one with its predecessor's frame — undetectable by the tick/delta
+integrity check when the neighbouring frames agree on ticks and delta, as a `[0, 0]` pair does. A frame with `error` now drops
+its whole subtree. Frames from ANY caller are still kept, because `saltOrdinal` counts same-salt
+rows of any sender (Ponder keeps PositionManager frames only because its event-side ordinal counts
+PositionManager events only — the populations must match, not the filter). **Cache caveat:**
+`getFeesAccrued` rows persisted before this change still parse and still carry any phantom frames,
+so a resync that must be exact should first purge, from
+`envio_<chainId>_effect_getFeesAccrued`, the rows of transactions that contain a reverted
+`modifyLiquidity` frame. The committed `.envio/cache` TSVs were empty when this changed.
+
+**Swap fees were priced at the previous swap's fee.** `swap-handler.ts` computed `feesETH`,
+`feesUSD`, `feesUSDUntracked`, `collectedFeesToken0/1` and the HookStats fee from the STORED
+`pool.feeTier`, and only then overwrote it with `event.params.fee`. On a dynamic-fee pool every
+swap was charged its predecessor's rate, and the FIRST swap was charged the Initialize value — the
+`0x800000` dynamic-fee flag, ~8.39x the volume. Fees now use this swap's `event.params.fee`;
+`pool.feeTier` keeps its meaning (still overwritten with the event fee, i.e. "the latest swap's
+fee"). This moves every fee-derived pool, token, PoolManager, HookStats and day/hour aggregate on
+dynamic-fee pools and on any pool whose swap fee changed (a protocol fee is part of the event's fee
+too), so it needs a resync to take effect on historical data.
+
+Tested in `src/feeSweep.test.ts` (the modular math, including a model of v4's own tick bookkeeping
+that checks the formula against what a position actually earned; the sweep reading and valuing
+out-of-range rows; heal vs plain refresh on `updatedAtBlock`), `src/feeFramePairing.test.ts`
+(reverted subtrees yield the frames and ordinals of the same trace without them) and
+`src/swapFee.test.ts` (stored 3000 / event 500 is priced at 500, through the real handlers).
 
 ### Validating against Ponder and the subgraph
 
