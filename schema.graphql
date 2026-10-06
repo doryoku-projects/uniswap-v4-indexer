@@ -93,6 +93,14 @@ type Pool
   collectedFeesToken0: BigDecimal!
   collectedFeesToken1: BigDecimal!
   collectedFeesUSD: BigDecimal!
+  # Tokens handed to this pool's in-range LPs through PoolManager.donate, summed
+  # over the pool's life (hooks and routers use it to pay out fees). Kept apart
+  # from feesUSD / collectedFees*, which are swap fees priced at the LP fee
+  # rate: a donation is not a fee on any swap, and a 0% pool can still have one.
+  # A donation does raise totalValueLocked*, because the tokens enter the pool.
+  donatedToken0: BigDecimal!
+  donatedToken1: BigDecimal!
+  donatedUSD: BigDecimal!
   totalValueLockedToken0: BigDecimal!
   totalValueLockedToken1: BigDecimal!
   totalValueLockedETH: BigDecimal!
@@ -358,6 +366,25 @@ type ModifyLiquidity
   tickLower: BigInt! # lower tick of the position
   tickUpper: BigInt! # upper tick of the position
   logIndex: BigInt! # index within the txn
+}
+
+# One PoolManager.donate call. Its presence is also the replay guard: the Pool,
+# Token and PoolManager TVL it adds are running sums, so a re-delivered Donate
+# must be recognised and skipped (see handlers/donate-handler.ts).
+type Donation
+  @storage(postgres: true)
+  @index(fields: ["pool", ["timestamp", "DESC"]]) {
+  id: ID! # <chainId>_<blockNumber>_<logIndex>, like Swap
+  chainId: BigInt!
+  transaction: String! # Instead of Transaction reference
+  timestamp: BigInt!
+  pool: String! # Instead of Pool reference
+  sender: String! # Instead of Bytes
+  origin: String! # Instead of Bytes
+  amount0: BigDecimal! # human units, always >= 0 (the donor pays the pool)
+  amount1: BigDecimal!
+  amountUSD: BigDecimal! # priced at the tokens' stored derivedETH, like ModifyLiquidity
+  logIndex: BigInt!
 }
 
 # Data accumulated and condensed into day stats for all of Uniswap, per chain

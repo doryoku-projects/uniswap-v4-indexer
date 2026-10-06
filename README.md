@@ -19,7 +19,7 @@ This indexer tracks all key events from Uniswap V4 `PoolManager` and `PositionMa
 - `Swap` - all swaps with amounts, price, liquidity, and transaction details
 - `ProtocolFeeUpdated` - the pool's protocol fee, which is carved out of each swap's fee (see the swap-fee note under "Five more defects")
 - `ModifyLiquidity` - liquidity additions and removals
-- `Donate` - donations to pools
+- `Donate` - donations to pools: the tokens are added to the pool's TVL and to `Pool.donatedToken0/1/USD`, and each call is kept as a `Donation` row (not a swap fee, see "Donations and hooks")
 - `Transfer` / `Approval` - ERC-6909 token transfers and approvals
 
 **Chains:**
@@ -850,6 +850,49 @@ same trace without them), `src/swapFee.test.ts` (stored 3000 / event 500 is pric
 dynamic pool's first swap is not priced at the flag, `feeTier` is never rewritten, and the
 protocol-fee split in both directions, through the real handlers) and `src/protocolFee.test.ts`
 (the packed-fee decoding and the LP-rate arithmetic).
+
+### Donations and hooks: what the pool figures include
+
+**Donations.** `PoolManager.donate` moves tokens from the caller into the pool and credits them to
+the in-range LPs as fee growth, so a pool whose own LP fee is 0% can still pay its LPs (hooks and
+routers use it). The event was subscribed to and dropped, which left those tokens out of TVL and
+gave a 0% pool no trace of where its LPs' income came from. `src/handlers/donate-handler.ts` now:
+
+- adds the amounts to `totalValueLocked*` on the pool, both tokens, the PoolManager and HookStats;
+- adds them to the pool's own `donatedToken0`, `donatedToken1` and `donatedUSD` (priced at the
+  tokens' stored `derivedETH`, as `ModifyLiquidity` prices its amounts);
+- writes a `Donation` row, keyed `<chainId>_<blockNumber>_<logIndex>`. The row is also the replay
+  guard: TVL and the donated totals are running sums, so a re-delivered `Donate` finds its row and is
+  skipped, the same role `Swap` plays for the swap handler.
+
+It deliberately does **not** touch `feesUSD`, `collectedFees*` or any day/hour `feesUSD`: those are
+swap fees priced at the swap's LP fee rate, and folding a donation into them would put a "fee" on a
+0% pool again. A consumer that wants LP income rather than swap fees adds `donatedUSD` itself. It
+also does not bump `txCount` or write day/hour rows, because a hook usually donates inside the
+transaction of the swap it is taxing; the TVL snapshot on those rows is refreshed by the pool's next
+swap or liquidity change.
+
+**Hooks.** The v4 `Swap` event is emitted with the pool's own delta, before `afterSwap` runs (the
+comment in v4-core `PoolManager._swap` says so), and `ModifyLiquidity` carries the liquidity delta,
+not the caller's settled delta. So for a hook with a `*_RETURNS_DELTA` permission, the pool's TVL,
+volume and LP fees summed from those events are what moved through its liquidity and are **not**
+distorted by the hook. What is missing is what the hook itself took: that cut is in no PoolManager
+event, so the hook's own fee is in no figure here, and a position's deposited, withdrawn and
+collected amounts can exceed what its owner actually paid or received. The Tickwise backend flags
+such pools (`customAccounting`, decoded from the low 14 bits of the hook address).
+
+**Known gap: fees collected on `ModifyLiquidity` are not taken out of TVL.** Pool and token TVL are
+sums of swap amounts (which include the LP fee) and liquidity-change principal. When an LP collects
+fees, v4 pays them out of the pool, but no event carries the amount and the exact figure arrives
+only through the `feesAccrued` trace for PositionManager positions (see the next sections). Nothing
+subtracts it, so TVL drifts upward with cumulative collected fees on busy pools. The Uniswap v4
+subgraph this indexer mirrors has the same property. It is not fixed here because the figure is only
+known after the pool, token and interval writes of the handler, and only for PositionManager
+callers; fixing it means restructuring that replay-guarded block.
+
+Tested in `src/donate.test.ts` (a donation to a 0% pool raises TVL and `donated*` and books no fees
+or `txCount`, donations accumulate, a re-delivered `Donate` is applied once, an uninitialized pool
+creates nothing).
 
 ### Validating against Ponder and the subgraph
 

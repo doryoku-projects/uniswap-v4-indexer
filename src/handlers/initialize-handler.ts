@@ -47,7 +47,7 @@ indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event
    * after the replay window heals them, and until it arrives the rewound values
    * feed `currentAmounts` for every position in the pool. Permanently lost are
    * the accumulated fields the same write leaves untouched: `txCount`,
-   * `volumeToken0/1`, `volumeUSD`, `feesUSD`, `collectedFees*`,
+   * `volumeToken0/1`, `volumeUSD`, `feesUSD`, `collectedFees*`, `donated*`,
    * `totalValueLocked*`, `liquidityProviderCount`.
    *
    * WHY THE POOL ROW IS THE MARKER. `Initialize` fires exactly once per pool on
@@ -324,6 +324,9 @@ indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event
     collectedFeesToken0: new BigDecimal(0),
     collectedFeesToken1: new BigDecimal(0),
     collectedFeesUSD: new BigDecimal(0),
+    donatedToken0: new BigDecimal(0),
+    donatedToken1: new BigDecimal(0),
+    donatedUSD: new BigDecimal(0),
     totalValueLockedToken0: new BigDecimal(0),
     totalValueLockedToken1: new BigDecimal(0),
     totalValueLockedETH: new BigDecimal(0),
