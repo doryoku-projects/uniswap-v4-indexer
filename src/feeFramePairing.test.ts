@@ -700,9 +700,8 @@ describe("traceGateCanPass — what still must NOT be traced", () => {
      *
      * Pure collects are 69.9% of fee-bearing settlements — the same share that
      * made the old `liquidityDelta < 0n` trace gate cover barely a third of the
-     * Avalanche damage. And a row clamped to 0 drops out of the fee sweep's
-     * candidate filter, so nothing re-reads it from chain: the loss is permanent
-     * against an append-only `totalFeesCollected`.
+     * Avalanche damage. And nothing re-reads a clamped row from chain, so the
+     * loss is permanent against an append-only `totalFeesCollected`.
      *
      * A zero-liquidity position can genuinely still hold uncollected fees, so
      * this traces on its own merits rather than merely defensively.

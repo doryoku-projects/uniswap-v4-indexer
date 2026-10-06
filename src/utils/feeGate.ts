@@ -1,22 +1,18 @@
 /*
- * The two ModifyLiquidity fee gates, in ONE place each.
+ * The ModifyLiquidity fee gates, in ONE place each.
  *
  * WHY THIS MODULE EXISTS
  *
- * `getFeeGrowthInside` is issued from TWO call sites in
- * `handlers/modifyLiquidity-handler.ts` — the preload block and the real path —
- * so that the whole batch's reads go out in parallel instead of one at a time
- * (see `PRELOAD` below). Two call sites with a copy of the predicate in each is
- * the failure mode that matters: the moment they disagree, the preload pass
- * warms an input the real pass never asks for (pure waste) or, far worse, the
- * real pass asks for one the preload pass skipped and pays full RPC latency
- * inside the strictly serial handler loop. So the predicate lives here, once,
- * and both sites call it.
- *
- * `getFeesAccrued` now has the same two call sites for the same reason: the
- * preload block PREFETCHES the trace, the real path reads it back from the memo.
- * Its gate is `traceGateForRow`, below, called by both — the preload call only
- * against the batch-start row, which can change cost but never a value.
+ * `getFeesAccrued` is issued from TWO call sites in
+ * `handlers/modifyLiquidity-handler.ts`: the preload block PREFETCHES the trace
+ * so the whole batch's traces go out in parallel, and the real path reads it
+ * back from the memo (see `PRELOAD` below). Two call sites with a copy of the
+ * predicate in each is the failure mode that matters: the moment they disagree,
+ * the preload pass warms an input the real pass never asks for (pure waste) or,
+ * far worse, the real pass asks for one the preload pass skipped and pays full
+ * trace latency inside the strictly serial handler loop. So the predicates live
+ * here, once, and both sites call them: `feeGate` (is this event attributable
+ * to an NFT position at all) and `traceGateForRow` (does it need a trace).
  *
  * `shouldTraceFees` is here for the same reason in reverse: it has one call
  * site, but it is the gate that decides whether a `debug_traceTransaction`
@@ -24,6 +20,11 @@
  * Exact collected fees are this indexer's hard requirement, so that predicate is
  * a named, unit-tested function rather than a condition buried in a 700-line
  * handler.
+ *
+ * There used to be a third: a per-event `getFeeGrowthInside` read that fed the
+ * `feeGrowthInside0/1LastX128` baseline for the uncollected-fee sweep. Both were
+ * removed when uncollected fees moved to the Tickwise backend, which reads them
+ * on chain itself.
  *
  * PRELOAD, AS ENVIO 3.7.0 ACTUALLY IMPLEMENTS IT
  *
@@ -46,58 +47,19 @@
  * preload pass did not warm.
  *
  * The inputs must therefore be IDENTICAL between the passes, because the memo is
- * keyed on the input. That is the other reason for one shared constructor:
- * `effectInput` below is built in one place, so the two passes cannot drift into
- * two different cache keys and pay for the read twice.
+ * keyed on the input. That is why the handler builds the trace input
+ * (`feesInput`) once and hands the same object to both passes.
  */
 
-import { type EvmOnEventContext } from "envio";
+import { tokenIdFromSalt } from "./positions";
+import { positionManagerFor } from "./v4Addresses";
 
-import { getFeeGrowthInside } from "../effects/positionState";
-import { isDegenerate, tokenIdFromSalt } from "./positions";
-import { positionManagerFor, v4AddressesFor } from "./v4Addresses";
-
-type handlerContext = EvmOnEventContext;
-
-/**
- * Everything the gate needs, and nothing that is unavailable before the
- * handler's own guard.
- *
- * `poolTick` / `poolSqrtPrice` are the POOL AS READ FROM THE STORE, not the
- * handler's mutated copy. The two are interchangeable here and that is a
- * property worth stating rather than assuming: the handler's `pool` is built by
- * spreading `existingPool` and overriding `txCount`,
- * `totalValueLockedToken0/1`, `liquidity`, `totalValueLockedETH` and
- * `totalValueLockedUSD` (modifyLiquidity-handler.ts:169-213). `tick` and
- * `sqrtPrice` are never among them, so `pool.tick === existingPool.tick` and
- * `pool.sqrtPrice === existingPool.sqrtPrice` by construction, and
- * `isDegenerate` — which reads only those two — returns the same answer from
- * either. That is what lets the preload block, which runs before `pool` exists,
- * evaluate the identical predicate.
- */
+/** Everything the gate needs, all of it available before the handler's own guard. */
 export interface FeeGateEvent {
   readonly chainId: number;
   /** `event.params.sender`, EIP-55 checksummed as Envio delivers it. */
   readonly sender: string;
   readonly salt: string;
-  /** `event.params.id`, the v4 PoolId (bytes32), NOT the chain-namespaced row id. */
-  readonly poolId: string;
-  readonly tickLower: bigint;
-  readonly tickUpper: bigint;
-  readonly blockNumber: number;
-  readonly poolTick: bigint | undefined;
-  readonly poolSqrtPrice: bigint | undefined;
-}
-
-/** The exact `getFeeGrowthInside` input, built in one place so both passes agree. */
-export interface FeeGrowthEffectInput {
-  // No `chainId`. `getFeeGrowthInside` is chain-scoped, so the chain is the
-  // cache table and the handler reads it from `context.chain.id`.
-  readonly stateView: string;
-  readonly poolId: string;
-  readonly tickLower: number;
-  readonly tickUpper: number;
-  readonly blockNumber: bigint;
 }
 
 export interface FeeGateDecision {
@@ -112,25 +74,11 @@ export interface FeeGateDecision {
   readonly attributable: boolean;
   /** The NFT tokenId, when `attributable` and the salt carries one. */
   readonly tokenId: bigint | undefined;
-  /** Must `getFeeGrowthInside` be issued for this event? */
-  readonly read: boolean;
-  /** Present iff `read`. */
-  readonly effectInput: FeeGrowthEffectInput | undefined;
 }
 
-const NO_READ = { read: false as const, effectInput: undefined };
-
 /**
- * THE single source of truth for "does this ModifyLiquidity need a
- * getFeeGrowthInside read, and for which position".
- *
- * The read is gated on `!degenerate` ALONE among the fee conditions — the same
- * place Ponder has it (apps/v4/src/index.ts:211-212) — and deliberately NOT on
- * the trace gate's `hadPosition && liquidity > 0` conjuncts. Gating it on those
- * silently lost fees: a mint has no prior position, so the read was skipped and
- * the position's `feeGrowthInside*LastX128` baseline stayed at `newPosition()`'s
- * 0, which is indistinguishable from the genuine (0, 0) a cleared tick pair
- * reports on a later close. See the `shouldTraceFees` note below.
+ * THE single source of truth for "is this ModifyLiquidity attributable to an
+ * NFT position, and which one".
  */
 export function feeGate(e: FeeGateEvent): FeeGateDecision {
   // A chain with no PositionManager entry cannot attribute anything: `salt` is
@@ -138,62 +86,9 @@ export function feeGate(e: FeeGateEvent): FeeGateDecision {
   // tokenId there. Same guard, same order, as the handler's own.
   const positionManager = positionManagerFor(e.chainId);
   if (!positionManager || e.sender.toLowerCase() !== positionManager) {
-    return { attributable: false, tokenId: undefined, ...NO_READ };
+    return { attributable: false, tokenId: undefined };
   }
-
-  const tokenId = tokenIdFromSalt(e.salt);
-  if (tokenId === undefined) {
-    return { attributable: true, tokenId: undefined, ...NO_READ };
-  }
-
-  // Tick math is meaningless at the edges of the representable domain, so a
-  // degenerate pool's amounts are zeroed and no fee read is worth an RPC.
-  if (isDegenerate(e.poolTick ?? 0n, e.poolSqrtPrice ?? 0n)) {
-    return { attributable: true, tokenId, ...NO_READ };
-  }
-
-  return {
-    attributable: true,
-    tokenId,
-    read: true,
-    effectInput: {
-      // No `chainId`: `getFeeGrowthInside` is chain-scoped, so the chain is the
-      // cache table, and the handler reads it from `context.chain.id`.
-      // `?? ""` rather than a skip, matching the call site this replaced: a
-      // chain with no StateView produces a failing read, which returns
-      // `ok: false` and keeps the row's previous fee-growth baseline. (An
-      // earlier version said it "FORCES the trace"; it no longer can — the
-      // trace gate is `gateCanPass` alone, see `shouldTraceFees`.)
-      stateView: v4AddressesFor(e.chainId)?.stateView ?? "",
-      poolId: e.poolId,
-      tickLower: Number(e.tickLower),
-      tickUpper: Number(e.tickUpper),
-      blockNumber: BigInt(e.blockNumber),
-    },
-  };
-}
-
-/** What `getFeeGrowthInside` resolves to, or `undefined` when the gate said no. */
-export type FeeGrowthReading =
-  | { readonly ok: boolean; readonly feeGrowthInside0X128: bigint; readonly feeGrowthInside1X128: bigint }
-  | undefined;
-
-/**
- * Evaluate the gate and, when it passes, issue `getFeeGrowthInside`.
- *
- * Called from BOTH passes with the same arguments. In the preload pass the
- * result is discarded — the point is the side effect of populating the effect's
- * in-memory output dict, exactly as `preloadIntervalData` populates the load
- * layer's (utils/intervalUpdates.ts:159-171). In the real pass the same call
- * short-circuits to that dict and costs nothing.
- */
-export async function readFeeGrowthInside(
-  context: handlerContext,
-  e: FeeGateEvent,
-): Promise<FeeGrowthReading> {
-  const gate = feeGate(e);
-  if (!gate.read || !gate.effectInput) return undefined;
-  return await context.effect(getFeeGrowthInside, gate.effectInput);
+  return { attributable: true, tokenId: tokenIdFromSalt(e.salt) };
 }
 
 /**
@@ -263,10 +158,8 @@ export async function readFeeGrowthInside(
  * `existing.liquidity > 0n` inside `gateCanPass` — mints are the bulk of
  * ModifyLiquidity and they never reach this.
  *
- * `getFeeGrowthInside` is still read on every attributable event, and that is
- * not vestigial: it feeds `feeGrowthInside0/1LastX128` on the Position row,
- * which the schema exposes and the head sweep diffs against. It is simply no
- * longer allowed to veto a trace.
+ * `feeGrowthChanged` cannot come back in any form now: the `getFeeGrowthInside`
+ * read it was derived from no longer exists.
  */
 export function shouldTraceFees(args: { readonly gateCanPass: boolean }): boolean {
   return args.gateCanPass;
@@ -304,9 +197,8 @@ export function shouldTraceFees(args: { readonly gateCanPass: boolean }): boolea
  *    its fee recorded as zero with no log line of any level. Pure collects are
  *    69.9% of fee-bearing settlements — the same share that made the old
  *    `liquidityDelta < 0n` gate cover barely a third of the Avalanche damage.
- *    Once a row is clamped to 0 it also drops out of the fee sweep's candidate
- *    filter, so nothing ever re-reads it from chain: the loss is permanent and
- *    `totalFeesCollected` is append-only.
+ *    Nothing ever re-reads a clamped row from chain, so the loss is permanent
+ *    and `totalFeesCollected` is append-only.
  *
  *    The justification is the DESYNC, not the position: a stored zero already
  *    known to be wrong cannot prove "no fees" for a collect any more than it can

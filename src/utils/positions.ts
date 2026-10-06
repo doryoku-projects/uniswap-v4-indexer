@@ -22,11 +22,15 @@
  *
  * WHAT IS NOT HERE
  *
- * Fee accounting. `totalFeesUncollected*` needs `getFeeGrowthInside`, and
- * `totalFeesCollected*` needs the `feesAccrued` return value of
+ * Fee accounting. `totalFeesCollected*` needs the `feesAccrued` return value of
  * `modifyLiquidity`, which appears in no log — v4 has no Collect event and
- * `ModifyLiquidity` carries no fee field. Both arrive later, through effects, and
- * both leave the fields at their previous value until then.
+ * `ModifyLiquidity` carries no fee field. It arrives later, through the trace
+ * effect, and leaves the fields at their previous value until then.
+ *
+ * Uncollected fees are not computed by this indexer at all; the Tickwise backend
+ * reads them on chain. `totalFeesUncollected0/1`, `feeGrowthInside0/1LastX128`
+ * and `feesUpdatedAtBlock/Timestamp` stay in the schema so existing queries keep
+ * resolving, and are always zero.
  */
 
 import { BigDecimal } from "envio";
@@ -136,21 +140,6 @@ export function currentAmounts(args: {
 }
 
 /**
- * Is a position in range, i.e. is it accruing NEW fees right now?
- *
- * NOT "does it have uncollected fees". This used to gate the fee sweep on the
- * claim that an out-of-range position's uncollected fees are exactly zero, so
- * it could be zeroed without a read. That is false: fees accrued while it was
- * in range stay claimable after it leaves, and the contract's modular math pays
- * them out (verified on chain, mainnet tokenIds 10014 and 100022). The sweep
- * now reads every candidate and uses this only to COUNT out-of-range reads in
- * its log line (`utils/feeSweep.ts`). Do not re-introduce it as a read skip.
- */
-export function isInRange(tickLower: bigint, tickUpper: bigint, poolTick: bigint): boolean {
-  return poolTick >= tickLower && poolTick < tickUpper;
-}
-
-/**
  * Is this pool's price at the edge of the representable domain?
  *
  * A port of Ponder's `isDegenerate` (core/math.ts), and it is a guard on the
@@ -217,6 +206,7 @@ export function newPosition(args: {
     withdrawnToken1: ZERO_BD,
     totalFeesCollected0: ZERO_BD,
     totalFeesCollected1: ZERO_BD,
+    // Always zero — see "WHAT IS NOT HERE" above.
     totalFeesUncollected0: ZERO_BD,
     totalFeesUncollected1: ZERO_BD,
 
@@ -230,8 +220,6 @@ export function newPosition(args: {
 
     updatedAtBlock: args.blockNumber,
     updatedAtTimestamp: args.timestamp,
-    // Zero, not the current block: no fee read has happened yet, and claiming
-    // otherwise would make the first sweep think this row was already current.
     feesUpdatedAtBlock: 0n,
     feesUpdatedAtTimestamp: 0n,
 

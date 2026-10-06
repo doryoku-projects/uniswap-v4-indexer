@@ -3,9 +3,8 @@
  *
  * Extracted from `tokenMetadata.ts`, where it was private, so that every effect
  * resolves its endpoint the same way. Two of them now need it: the token
- * metadata reads that were always here, and the position fee reads
- * (`getFeeGrowthInside` / `getPositionInfo` and `debug_traceTransaction`) ported
- * from Ponder.
+ * metadata reads that were always here, and the collected-fee traces
+ * (`debug_traceTransaction`) ported from Ponder.
  *
  * Note the fee paths have stricter requirements than metadata does. The traces
  * need an ARCHIVE node with the `debug` namespace, and a public fallback will

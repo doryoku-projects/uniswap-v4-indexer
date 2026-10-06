@@ -208,10 +208,9 @@ const POS_COLS = [
   "tokenId", "owner", "origin", "poolId", "tickLower", "tickUpper", "liquidity",
   "isActive", "isPriceable", "createdAtTimestamp", "createdAtBlockNumber", "closedAtTimestamp",
   "depositedToken0", "depositedToken1", "withdrawnToken0", "withdrawnToken1",
-  "totalFeesCollected0", "totalFeesCollected1", "totalFeesUncollected0", "totalFeesUncollected1",
+  "totalFeesCollected0", "totalFeesCollected1",
   "amount0", "amount1", "totalGasCostETH",
-  "feeGrowthInside0LastX128", "feeGrowthInside1LastX128",
-  "updatedAtBlock", "updatedAtTimestamp", "feesUpdatedAtBlock",
+  "updatedAtBlock", "updatedAtTimestamp",
 ];
 
 const positions = ENVIO_URL
@@ -258,8 +257,8 @@ if (positions.length === 0) {
 const PONDER_FIELDS = `tokenId owner poolId tickLower tickUpper liquidity isActive isPriceable
   createdAtTimestamp createdAtBlockNumber closedAtTimestamp
   depositedToken0 depositedToken1 withdrawnToken0 withdrawnToken1
-  totalFeesCollected0 totalFeesCollected1 totalFeesUncollected0 totalFeesUncollected1
-  amount0 amount1 totalGasCostETH feeGrowthInside0LastX128 feeGrowthInside1LastX128
+  totalFeesCollected0 totalFeesCollected1
+  amount0 amount1 totalGasCostETH
   updatedAtBlock updatedAtTimestamp`;
 
 const ponderPos = new Map();
@@ -488,11 +487,8 @@ for (const mine of positions) {
   ]) {
     check(f, cmpNum(mine[f], p[f]));
   }
-  // Uncollected is 0 on both sides only while our head-gated sweep has not run.
-  check("totalFeesUncollected0", cmpNum(mine.totalFeesUncollected0, p.totalFeesUncollected0));
-  check("totalFeesUncollected1", cmpNum(mine.totalFeesUncollected1, p.totalFeesUncollected1));
-  check("feeGrowthInside0LastX128", cmpBig(mine.feeGrowthInside0LastX128, p.feeGrowthInside0LastX128));
-  check("feeGrowthInside1LastX128", cmpBig(mine.feeGrowthInside1LastX128, p.feeGrowthInside1LastX128));
+  // Uncollected fees and the fee-growth baseline are not compared: neither
+  // indexer computes them any more (the Tickwise backend reads them on chain).
 }
 
 // Subgraph arbitration on identity.

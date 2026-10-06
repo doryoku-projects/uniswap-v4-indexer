@@ -41,9 +41,10 @@
  *     reports 0 for pools with real token volume. Reported as advisory.
  *   Uncollected fees                        NOT COMPARABLE against an external
  *     reference — neither the subgraph nor Ponder holds them at our block — but
- *     GATED INTERNALLY, against our own data. The sweep is the ONLY writer of
- *     both `totalFeesUncollected*` and `feesUpdatedAtBlock`, so one cannot exist
- *     without the other: a readable NON-ZERO uncollected figure on a position
+ *     GATED INTERNALLY, against our own data. The indexer no longer computes
+ *     uncollected fees (the sweep was removed; both columns are always 0), and
+ *     the sweep was the only writer of both, so a readable NON-ZERO uncollected
+ *     figure on a position
  *     whose readable `feesUpdatedAtBlock` is 0 is a self-contradiction and FAILS
  *     (exit 1). A value that will not parse as a number is a MISSING
  *     MEASUREMENT, not a disagreement, and records a 2 — the same call the
@@ -634,8 +635,8 @@ for (const chain of CHAINS) {
       if (contradictory.length > 8) console.log(`      ... and ${contradictory.length - 8} more`);
       out.problems.push(
         `uncollected fees: ${contradictory.length} position(s) carry a readable NON-ZERO ` +
-          `totalFeesUncollected while a readable feesUpdatedAtBlock is 0 — the sweep is the only writer ` +
-          `of both, so neither can exist without the other`,
+          `totalFeesUncollected while a readable feesUpdatedAtBlock is 0 — nothing writes either column ` +
+          `any more, so both must be 0`,
       );
     } else if (measurable.length === 0 && minePos.length > 0) {
       // Nothing measurable at all: the `swept 0, non-zero 0` line above would

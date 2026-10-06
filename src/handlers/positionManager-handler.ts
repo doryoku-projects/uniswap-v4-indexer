@@ -48,8 +48,7 @@ indexer.onEvent(
       });
 
     // Ownership IS a position change, so it moves `updatedAtBlock` — the
-    // backend's change feed should see it. It deliberately leaves
-    // `feesUpdatedAtBlock` alone; only the fee sweep owns that column.
+    // backend's change feed should see it.
     context.Position.set({
       ...position,
       owner: event.params.to,

@@ -45,10 +45,10 @@ indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event
    * this handler just zeroed. `tick`, `sqrtPrice` and `liquidity` do recover —
    * `swap-handler.ts` ASSIGNS all three from event params, so the first Swap
    * after the replay window heals them, and until it arrives the rewound values
-   * feed `currentAmounts` for every position in the pool, including the fee
-   * sweep's amount refresh. Permanently lost are the accumulated fields the same
-   * write leaves untouched: `txCount`, `volumeToken0/1`, `volumeUSD`, `feesUSD`,
-   * `collectedFees*`, `totalValueLocked*`, `liquidityProviderCount`.
+   * feed `currentAmounts` for every position in the pool. Permanently lost are
+   * the accumulated fields the same write leaves untouched: `txCount`,
+   * `volumeToken0/1`, `volumeUSD`, `feesUSD`, `collectedFees*`,
+   * `totalValueLocked*`, `liquidityProviderCount`.
    *
    * WHY THE POOL ROW IS THE MARKER. `Initialize` fires exactly once per pool on
    * chain, and this is the ONLY handler that creates a Pool row — the other two

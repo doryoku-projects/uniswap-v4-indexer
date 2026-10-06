@@ -11,8 +11,7 @@
  * modifyLiquidity-handler returned ABOVE `Position.set`, so the only handler
  * still writing the row was the PositionManager `Transfer` handler — and its
  * write is `newPosition()` spread with an owner, i.e. the stub. It is permanent:
- * the fee sweep filters on `poolId !== ""` (utils/feeSweep.ts, the candidate filter), so a stub is
- * never re-read from chain either.
+ * nothing re-reads a position from chain, so a stub stays a stub.
  *
  * Three cases, and all three matter:
  *
@@ -26,8 +25,8 @@
  *      "is the row still a stub?" passes case 1 and fails this one.
  *
  * No network: `fetch` is stubbed to a JSON-RPC -32601 for the whole file, which
- * is the capability-gap path both effects degrade through
- * (`isTraceCapabilityError`, and `getFeeGrowthInside`'s `ok: false`).
+ * is the capability-gap path the trace effect degrades through
+ * (`isTraceCapabilityError`).
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { createTestIndexer, BigDecimal } from "envio";
@@ -283,7 +282,7 @@ describe("replayed Initialize and the Pool row", () => {
    * `if (!replayed)` and `swap-handler.ts` returns outright. Before the guard
    * this left the pool at liquidity 0 / txCount 0 permanently, with tick and
    * sqrtPrice rewound to the initialize values, feeding every position's
-   * `currentAmounts`, including the fee sweep's amount refresh.
+   * `currentAmounts`.
    */
   it("does not zero a pool when a committed Initialize is re-delivered", async () => {
     const ix = createTestIndexer();

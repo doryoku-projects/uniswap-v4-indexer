@@ -19,7 +19,6 @@ import { getFeesAccrued, getFeesAccruedRetry } from "../effects/feesAccrued";
 import { pickFeeFrame, saltOrdinal } from "../utils/feeFrames";
 import {
   feeGate,
-  readFeeGrowthInside,
   shouldTraceFees,
   traceGateForRow,
   type FeeGateEvent,
@@ -41,7 +40,7 @@ import {
 /**
  * Chains already warned about a missing PositionManager entry, so the warning
  * is one line per chain rather than one per event. Module-level, matching the
- * existing per-chain caches in utils/chainHead.ts and effects/feesAccrued.ts.
+ * existing per-chain cache in effects/feesAccrued.ts.
  */
 const warnedNoPositionManager = new Set<number>();
 
@@ -91,37 +90,17 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
     ]);
   if (!existingToken0 || !existingToken1 || !bundle) return;
 
-  /*
-   * The fee gate's whole input, built ONCE and shared by both passes.
-   *
-   * `existingPool` rather than the mutated `pool` below, and that is exact, not
-   * approximate: `pool` is `{...existingPool}` with `txCount`,
-   * `totalValueLockedToken0/1`, `liquidity`, `totalValueLockedETH` and
-   * `totalValueLockedUSD` overridden (the `let pool = {...}` block below, and
-   * the two reassignments after it — :240-284 at the time of writing). `tick` and
-   * `sqrtPrice` — the only two fields `isDegenerate` reads — are never touched,
-   * so the predicate cannot differ between the two objects.
-   *
-   * One object, not two constructions, because the effect memo is keyed on the
-   * input: if the preload pass and the real pass built even slightly different
-   * inputs, the real pass would miss the dict and pay full RPC latency inside
-   * the strictly serial handler loop. See utils/feeGate.ts for the mechanism.
-   */
+  // The attribution gate's input, shared by both passes so they cannot disagree
+  // on which events are position events. See utils/feeGate.ts.
   const feeGateEvent: FeeGateEvent = {
     chainId: event.chainId,
     sender: event.params.sender,
     salt: event.params.salt,
-    poolId: event.params.id,
-    tickLower: event.params.tickLower,
-    tickUpper: event.params.tickUpper,
-    blockNumber: event.block.number,
-    poolTick: existingPool.tick,
-    poolSqrtPrice: existingPool.sqrtPrice,
   };
 
   /*
-   * The `getFeesAccrued` input, built ONCE for the same reason as `feeGateEvent`:
-   * the preload pass prefetches the trace and the real pass must ask for the
+   * The `getFeesAccrued` input, built ONCE and shared by both passes: the
+   * preload pass prefetches the trace and the real pass must ask for the
    * byte-identical key or it misses the memo and pays trace latency in series.
    * Also handed to `getFeesAccruedRetry`, whose input shape is the same.
    *
@@ -141,8 +120,7 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
      * `preloadBatchOrThrow` runs every handler in the batch concurrently;
      * `runBatchHandlersOrThrow` then runs them one at a time. A read left
      * behind the `return` below is therefore a read taken at full latency, in
-     * series, once per event — which is what `getFeeGrowthInside` was, and it
-     * is issued on nearly every PositionManager ModifyLiquidity.
+     * series, once per event.
      *
      * The two entity reads are the same story without the RPC:
      * `Position.get` and `PositionTransaction.getWhere` are one SELECT each per
@@ -183,7 +161,6 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
         tokenIds: [existingToken0.id, existingToken1.id],
         includeUniswapDayData: true,
       }),
-      readFeeGrowthInside(context, feeGateEvent),
       // The replay guard's own read, warmed here so it is grouped with the rest
       // of the batch instead of costing one serialized SELECT per event in the
       // sequential pass. Same id the guard computes below.
@@ -274,8 +251,7 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
    * `isActive: false`. Measured on the live rebuild: 12 chain-8453 positions
    * (e.g. `8453_4032`) frozen as that stub, each with a CORRECT
    * `ModifyLiquidity` + `PositionTransaction` ledger behind it, and each one
-   * permanent — the fee sweep filters on `poolId !== ""`
-   * (utils/feeSweep.ts, the candidate filter), so a stub is never re-read from chain either.
+   * permanent — nothing re-reads a position from chain, so a stub stays a stub.
    *
    * So the replay now skips the accumulators it cannot reason about and RUNS
    * ON to the position block, which CAN reason about itself: `lastModifyBlock`
@@ -565,16 +541,16 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
   // position-blind and none of the position surface can exist.
   //
   // Everything below is derived from the event plus state this handler already
-  // computed — no RPC. Fee columns are deliberately left at their previous
-  // values: `totalFeesUncollected*` needs getFeeGrowthInside and
-  // `totalFeesCollected*` needs the `feesAccrued` return value of
-  // modifyLiquidity, which is in no log. Both arrive via effects later.
+  // computed — no RPC. The one exception is `totalFeesCollected*`, which needs
+  // the `feesAccrued` return value of modifyLiquidity — it is in no log, so it
+  // arrives via the trace effect below. Uncollected fees are not computed here
+  // at all; the Tickwise backend reads them on chain.
   //
   // ─── NFT POSITIONS ONLY: the caller MUST be the PositionManager ────────────
   //
   // `salt` is an NFT tokenId only when the PositionManager put it there. The
   // v4 position key is (owner = msg.sender, tickLower, tickUpper, salt) — see
-  // the `getPositionInfo` ABI in effects/positionState.ts:65-79 — and `salt` is
+  // StateView's `getPositionInfo` — and `salt` is
   // a CALLER-SUPPLIED bytes32 with no constraint on its value
   // (effects/feesAccrued.ts:53-62). Any contract that opens a PoolManager lock
   // can therefore call modifyLiquidity with any salt it likes: hooks, custom
@@ -605,9 +581,8 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
   //      positions, or any other v4 position manager running its own counter
   //      from 1, would use as a salt. The write then clobbers the genuine
   //      position's `poolId`, ticks, and running `liquidity` while KEEPING its
-  //      owner and created-at, and the next sweep asks
-  //      getPositionInfo(<hook pool>, PositionManager, <hook ticks>, salt),
-  //      gets liquidity 0, and zeroes the real user's `amount0`/`amount1`.
+  //      owner and created-at, so the real user's `amount0`/`amount1` are
+  //      then priced against the hook pool and ticks.
   //
   // Placed AFTER the pool/token/tick/interval writes above and before the gas
   // query below: those mirror the vanilla subgraph, which counts every
@@ -616,11 +591,9 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
   // would drop the event before those writes.
   const positionManager = positionManagerFor(event.chainId);
   if (!positionManager) {
-    // Refuse to attribute rather than attribute wrongly. Such a chain has no
-    // fee sweep either (feeSync-block.ts:97 gates on `v4AddressesFor`), so its
-    // position rows would never get uncollected fees or refreshed amounts — a
-    // half-built row that reads as real is worse than no row. Warned once per
-    // chain so enabling a chain without a table entry is loud, not silent.
+    // Refuse to attribute rather than attribute wrongly — a half-built row
+    // that reads as real is worse than no row. Warned once per chain so
+    // enabling a chain without a table entry is loud, not silent.
     if (!warnedNoPositionManager.has(event.chainId)) {
       warnedNoPositionManager.add(event.chainId);
       context.log.warn(
@@ -689,7 +662,7 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
      *
      * `lastModifyBlock`/`lastModifyLogIndex` is the (block, logIndex) of the
      * last ModifyLiquidity folded into THIS row, written nowhere else — not by
-     * the Transfer handler, not by the fee sweep. Events reach a chain's
+     * the Transfer handler. Events reach a chain's
      * handlers in (block, logIndex) order, so the pair is a high-water mark and
      * the comparison is exact:
      *
@@ -736,7 +709,7 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
 
     // Tick math is meaningless at the edges of the representable domain, where
     // it returns numbers that are enormous but physically absurd. Ponder gates
-    // every amount on this and so does the sweep.
+    // every amount on this.
     const degenerate = isDegenerate(pool.tick ?? 0n, pool.sqrtPrice ?? 0n);
 
     // EXACT collected fees, from the call trace.
@@ -765,7 +738,7 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
      * `!degenerate` IS DELIBERATELY NOT HERE, and that is a change. A degenerate
      * pool is one parked at the edge of the representable tick domain, where the
      * tick FORMULAS produce astronomical nonsense — so its computed amounts are
-     * zeroed, below and in the sweep, and they stay zeroed. But `feesAccrued` is
+     * zeroed below, and they stay zeroed. But `feesAccrued` is
      * not computed from ticks: it is a RETURN VALUE read out of the call trace,
      * and a degenerate pool's collected fee is real money that really moved.
      * Zeroing it because the pool's PRICE is unusable confuses two different
@@ -806,61 +779,6 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
     // what to prefetch, so the two passes cannot drift. This call is the one that
     // decides; the preload answer only ever changes cost.
     const gateCanPass = traceGateForRow(existing, delta);
-
-    /*
-     * THE SAME CALL THE PRELOAD BLOCK ABOVE ALREADY MADE, with the same
-     * `feeGateEvent`, so this normally resolves from the effect output dict
-     * without touching the network (`LoadManager.res.mjs:80`). It stays here
-     * rather than being read out of a variable so that the real path remains
-     * correct on its own — a preload pass that was skipped, or whose throw was
-     * swallowed, costs latency here and nothing else.
-     *
-     * The predicate lives in `feeGate` (utils/feeGate.ts) and is NOT repeated
-     * here. Two copies is the specific failure this refactor exists to prevent:
-     * a preload copy that drifts from the real one either warms an input nobody
-     * asks for or, worse, misses the one that is asked for and puts a full RPC
-     * round trip back inside the serial loop.
-     *
-     * Within this branch the gate reduces to `!degenerate` — the caller is
-     * already known to be the PositionManager and `tokenId` is already known to
-     * exist — which is exactly where Ponder has it
-     * (apps/v4/src/index.ts:211-212), and deliberately NOT on `gateCanPass`.
-     * Gating the READ on `gateCanPass` silently lost fees: a mint has
-     * `hadPosition === false`, so the read was skipped and
-     * `feeGrowthInside0/1LastX128` kept `newPosition()`'s default of 0n, which
-     * is indistinguishable from the genuine (0, 0) that a cleared tick pair
-     * reports on the eventual close. Measured on Avalanche tokenId 1097 and
-     * Arbitrum tokenIds 268 and 771.
-     *
-     * WHAT THIS READ IS STILL FOR, now that it no longer gates the trace. It
-     * feeds `feeGrowthInside0/1LastX128` on the Position row, which the schema
-     * exposes. The head sweep does NOT diff against that column: it values
-     * UNCOLLECTED fees against the contract's own checkpoint
-     * (`getPositionInfo`), read in the same multicall as `getFeeGrowthInside`,
-     * and then overwrites the column with it — the modular math in
-     * `utils/fees.ts` is only exact against that checkpoint, and diffing it
-     * mod 2^256 against this pool-level value could manufacture a ~2^256 fee.
-     * What this read must never again do is decide whether a COLLECTED fee
-     * gets measured: it is a pool-level, end-of-block number, and the fee it was
-     * being used to predict is set by the position's own mid-transaction
-     * checkpoint.
-     */
-    const fgNow = await readFeeGrowthInside(context, feeGateEvent);
-
-    /*
-     * THE READ SURVIVES; THE COMPARISON DOES NOT. `feeGrowthChanged` used to be
-     * derived here and fed to `shouldTraceFees`. It is gone: comparing this
-     * POOL-level, END-OF-BLOCK read against the POSITION's own MID-TRANSACTION
-     * checkpoint is unsound in both directions, and it silently suppressed the
-     * trace for 750 of the 1,167 wrong Avalanche positions.
-     *
-     * `fgNow` itself is still needed, for the two baseline columns below.
-     */
-    // Re-baseline to what the pool reports now, so the next event's comparison
-    // is against this settle. Ponder advances this even when the trace fails,
-    // so accounting stays consistent and only that one collect is under-counted.
-    const fg0Last = fgNow?.ok ? fgNow.feeGrowthInside0X128 : existing.feeGrowthInside0LastX128;
-    const fg1Last = fgNow?.ok ? fgNow.feeGrowthInside1X128 : existing.feeGrowthInside1LastX128;
 
     let settled0 = ZERO_BD;
     let settled1 = ZERO_BD;
@@ -1087,16 +1005,8 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
             ? existing.closedAtTimestamp
             : BigInt(event.block.timestamp),
 
-      // The settle baseline for the next event's trace-skip comparison.
-      feeGrowthInside0LastX128: fg0Last,
-      feeGrowthInside1LastX128: fg1Last,
-
       totalFeesCollected0: existing.totalFeesCollected0.plus(settled0),
       totalFeesCollected1: existing.totalFeesCollected1.plus(settled1),
-      // Just settled ⇒ nothing outstanding. The sweep refreshes it on its own
-      // cadence; Ponder does exactly this (index.ts:318, "just settled → 0").
-      totalFeesUncollected0: ZERO_BD,
-      totalFeesUncollected1: ZERO_BD,
 
       /*
        * Only charged when this event actually writes a ledger row.
@@ -1119,7 +1029,6 @@ indexer.onEvent({ contract: "PoolManager", event: "ModifyLiquidity" }, async ({ 
         : existing.totalGasCostETH,
 
       // A real position change — the backend's change feed should see this.
-      // `feesUpdatedAtBlock` is untouched; only the fee sweep owns it.
       updatedAtBlock: BigInt(event.block.number),
       updatedAtTimestamp: BigInt(event.block.timestamp),
 

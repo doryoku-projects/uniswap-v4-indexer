@@ -170,9 +170,7 @@ type Position
   # The backend's change feed: `chainId _eq`, `updatedAtBlock _gt`, ordered by
   # (updatedAtBlock, id). A single-column updatedAtBlock index can't serve it,
   # because block numbers from other chains interleave in the same range.
-  @index(fields: ["chainId", "updatedAtBlock", "id"])
-  # The fee sweep's `chainId _eq`, `feesUpdatedAtBlock _lte` (see below).
-  @index(fields: ["chainId", "feesUpdatedAtBlock"]) {
+  @index(fields: ["chainId", "updatedAtBlock", "id"]) {
   id: ID! # <chainId>_<tokenId>
   chainId: BigInt!
   tokenId: BigInt! @index
@@ -200,6 +198,8 @@ type Position
   withdrawnToken1: BigDecimal!
   totalFeesCollected0: BigDecimal!
   totalFeesCollected1: BigDecimal!
+  # DEPRECATED, always 0. Uncollected fees are computed by the Tickwise backend
+  # on chain; the indexer's sweep was removed. Kept so existing queries resolve.
   totalFeesUncollected0: BigDecimal!
   totalFeesUncollected1: BigDecimal!
 
@@ -210,40 +210,29 @@ type Position
   amount0: BigDecimal!
   amount1: BigDecimal!
 
-  # Internal: last-settled fee growth, for the next uncollected delta. Never
-  # served — the backend has no consumer for it.
+  # DEPRECATED, always 0. Was the baseline for the removed uncollected-fee
+  # sweep. Never served — the backend has no consumer for it.
   feeGrowthInside0LastX128: BigInt!
   feeGrowthInside1LastX128: BigInt!
 
   totalGasCostETH: BigDecimal! # human, chain-native token
 
-  # ─── Two watermarks, deliberately separate ────────────────────────────────
+  # ─── Change-feed watermark ────────────────────────────────────────────────
   # `updatedAtBlock` moves ONLY when the position itself changed (a
   # ModifyLiquidity or a Transfer). The backend's live listener watches it as a
   # change feed and enqueues one refresh per row returned.
-  #
-  # `feesUpdatedAtBlock` moves when the periodic fee sweep re-read this row.
-  # Ponder conflates the two in one column, so each sweep presents the entire
-  # active set as changed and triggers thousands of refreshes for quantities
-  # that did not move. Keeping them apart is the fix, and it only works if it is
-  # in the schema from the start.
   updatedAtBlock: BigInt!
   updatedAtTimestamp: BigInt!
-  # Indexed: the fee sweep queries `feesUpdatedAtBlock _lt <cutoff>` to find
-  # positions it has not refreshed this cycle, which is what keeps its working
-  # set bounded instead of scanning every active position like Ponder does.
-  # The sweep itself is served by the (chainId, feesUpdatedAtBlock) composite
-  # above; this single-column index stays because `getWhere` wants an index
-  # leading with every column it filters on, and would otherwise build one
-  # lazily on a hot table.
-  feesUpdatedAtBlock: BigInt! @index
+  # DEPRECATED, always 0. Was the removed fee sweep's watermark; unindexed now
+  # that nothing queries it.
+  feesUpdatedAtBlock: BigInt!
   feesUpdatedAtTimestamp: BigInt!
 
   # ─── Replay watermark: the LAST ModifyLiquidity folded into THIS row ───────
   # `(block, logIndex)` of the last ModifyLiquidity whose non-idempotent
   # arithmetic — `liquidity`, the deposited/withdrawn/fee/gas sums — was applied
   # to this row. Written ONLY by modifyLiquidity-handler, never by the Transfer
-  # handler or the fee sweep, which is exactly what makes it usable: it answers
+  # handler, which is exactly what makes it usable: it answers
   # "has this event already been counted into THIS position?" where
   # `updatedAtBlock` cannot, because a Transfer moves that in the same block as
   # the mint's ModifyLiquidity.
