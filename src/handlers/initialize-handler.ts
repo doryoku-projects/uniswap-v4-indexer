@@ -304,6 +304,9 @@ indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event
     token0: token0Id,
     token1: token1Id,
     feeTier: BigInt(event.params.fee),
+    // v4 starts every pool at protocol fee 0 and emits nothing for it; the
+    // value arrives later through ProtocolFeeUpdated (protocolFee-handler.ts).
+    protocolFee: 0n,
     liquidity: 0n,
     sqrtPrice: event.params.sqrtPriceX96,
     token0Price: prices[0],

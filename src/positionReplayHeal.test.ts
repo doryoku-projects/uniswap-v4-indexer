@@ -247,6 +247,7 @@ const seedPool = (ix: ReturnType<typeof createTestIndexer>) =>
     token0: `${CHAIN}_0x0000000000000000000000000000000000000000`,
     token1: `${CHAIN}_0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48`,
     feeTier: 3000n,
+    protocolFee: 0n,
     liquidity: SEEDED_LIQUIDITY,
     sqrtPrice: 79228162514264337593543950336n,
     token0Price: new BigDecimal("1"),

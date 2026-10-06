@@ -6,6 +6,7 @@ import { getChainConfig } from "../utils/chains";
 import { convertTokenToDecimal } from "../utils";
 import { getTrackedAmountUSD, getNativePriceInUSD } from "../utils/pricing";
 import { safeDiv, sanitizeBD } from "../utils/index";
+import { isZeroForOne, lpFeeRate } from "../utils/fees";
 import { ZERO_BD } from "../utils/constants";
 import { findNativePerToken } from "../utils/pricing";
 import { sqrtPriceX96ToTokenPrices } from "../utils/pricing";
@@ -187,42 +188,53 @@ indexer.onEvent({ contract: "PoolManager", event: "Swap" }, async ({ event, cont
   );
   const amountTotalUSDUntracked = amount0USD.plus(amount1USD).div(BD_TWO);
   /*
-   * THIS SWAP'S OWN FEE — `event.params.fee` — prices this swap's fees.
+   * THIS SWAP'S LP FEE RATE prices this swap's fees.
    *
-   * It used to be `pool.feeTier`, i.e. the STORED value, which this handler
-   * only overwrites with `event.params.fee` further down. So every swap was
-   * charged the PREVIOUS swap's rate: on a dynamic-fee pool each swap carried
-   * its predecessor's fee, and the FIRST swap of a dynamic-fee pool carried the
-   * Initialize value — the 0x800000 (8,388,608) dynamic-fee flag, i.e. fees of
-   * ~8.39x the swap's volume. Static-fee pools were unaffected only while the
-   * event fee happened to equal the stored one (a protocol fee changes the
-   * event's `swapFee`, too). Ponder's `swapPricing` prices with the event fee for the
-   * same reason (core/pricing.ts, "decision (a)").
+   * Two things are wrong with the obvious inputs, and both used to be here.
    *
-   * `pool.feeTier` itself keeps its meaning — it is still overwritten with the
-   * event fee below, so it reads as "the most recent swap's fee".
+   * 1. `pool.feeTier` is the STORED value, not this swap's. This handler used to
+   *    overwrite it with `event.params.fee` further down, so every swap was
+   *    charged the PREVIOUS swap's rate: on a dynamic-fee pool each swap
+   *    carried its predecessor's fee, and the FIRST swap carried the Initialize
+   *    value — the 0x800000 (8,388,608) dynamic-fee flag, i.e. fees of ~8.39x
+   *    the swap's volume. `feeTier` is now the PoolKey fee and is never
+   *    rewritten, so it is a label, not an input.
+   *
+   * 2. `event.params.fee` is itself not the LP fee. It is the COMBINED swap fee,
+   *    LP fee plus the pool's protocol fee for this direction. Pricing with it
+   *    credits LPs with the protocol's cut: ETH/USDC 0.05% with a 0.0125%
+   *    protocol fee emits 625, not 500. The LPs earn `swapFee - protocolFee` of
+   *    the gross input (see the note in utils/fees.ts), so that is what is
+   *    used — `Pool.protocolFee` is kept current by protocolFee-handler.ts.
+   *    With no protocol fee set the rate is the event fee unchanged.
+   *
+   * Ponder's `swapPricing` was written against the event fee (core/pricing.ts,
+   * "decision (a)"), so on a pool with a protocol fee set the two indexers'
+   * fee figures differ by the protocol's share.
    *
    * Hoisted, as before: one BigDecimal for the fee and the module-scope
    * divisor, instead of five constructions of each per event.
    */
-  const swapFeeBD = new BigDecimal(event.params.fee.toString());
-  const feeRate = swapFeeBD.div(BD_ONE_MILLION);
+  const zeroForOne = isZeroForOne(event.params.amount0, event.params.amount1);
+  const lpFeeBD = new BigDecimal(
+    lpFeeRate(BigInt(event.params.fee), pool.protocolFee, zeroForOne).toString(),
+  );
+  const feeRate = lpFeeBD.div(BD_ONE_MILLION);
   // Calculate fees
-  const feesETH = amountTotalETHTracked.times(swapFeeBD).div(BD_ONE_MILLION);
-  const feesUSD = amountTotalUSDTracked.times(swapFeeBD).div(BD_ONE_MILLION);
+  const feesETH = amountTotalETHTracked.times(lpFeeBD).div(BD_ONE_MILLION);
+  const feesUSD = amountTotalUSDTracked.times(lpFeeBD).div(BD_ONE_MILLION);
   // Calculate untracked fees
   const feesUSDUntracked = amountTotalUSDUntracked.times(feeRate);
   // Calculate collected fees in tokens
-  const feesToken0 = amount0Abs.times(swapFeeBD).div(BD_ONE_MILLION);
-  const feesToken1 = amount1Abs.times(swapFeeBD).div(BD_ONE_MILLION);
+  const feesToken0 = amount0Abs.times(lpFeeBD).div(BD_ONE_MILLION);
+  const feesToken1 = amount1Abs.times(lpFeeBD).div(BD_ONE_MILLION);
   // Store current pool TVL values for later calculations
   const currentPoolTvlETH = pool.totalValueLockedETH;
   const currentPoolTvlUSD = pool.totalValueLockedUSD;
-  // Update pool values (feeTier updated to actual swap fee for dynamic fee
-  // pools — AFTER the fees above were priced with that same event fee)
+  // Update pool values. `feeTier` is deliberately not touched: it is the PoolKey
+  // fee, and the per-swap fee lives on the Swap row.
   pool = {
     ...pool,
-    feeTier: BigInt(event.params.fee),
     txCount: pool.txCount + 1n,
     sqrtPrice: event.params.sqrtPriceX96,
     tick: event.params.tick,
