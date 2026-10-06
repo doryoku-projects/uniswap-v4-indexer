@@ -11,8 +11,7 @@
  * modifyLiquidity-handler returned ABOVE `Position.set`, so the only handler
  * still writing the row was the PositionManager `Transfer` handler — and its
  * write is `newPosition()` spread with an owner, i.e. the stub. It is permanent:
- * the fee sweep filters on `poolId !== ""` (feeSync-block.ts:292), so a stub is
- * never re-read from chain either.
+ * nothing re-reads a position from chain, so a stub stays a stub.
  *
  * Three cases, and all three matter:
  *
@@ -26,8 +25,8 @@
  *      "is the row still a stub?" passes case 1 and fails this one.
  *
  * No network: `fetch` is stubbed to a JSON-RPC -32601 for the whole file, which
- * is the capability-gap path both effects degrade through
- * (`isTraceCapabilityError`, and `getFeeGrowthInside`'s `ok: false`).
+ * is the capability-gap path the trace effect degrades through
+ * (`isTraceCapabilityError`).
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { createTestIndexer, BigDecimal } from "envio";
@@ -248,6 +247,7 @@ const seedPool = (ix: ReturnType<typeof createTestIndexer>) =>
     token0: `${CHAIN}_0x0000000000000000000000000000000000000000`,
     token1: `${CHAIN}_0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48`,
     feeTier: 3000n,
+    protocolFee: 0n,
     liquidity: SEEDED_LIQUIDITY,
     sqrtPrice: 79228162514264337593543950336n,
     token0Price: new BigDecimal("1"),
@@ -265,6 +265,9 @@ const seedPool = (ix: ReturnType<typeof createTestIndexer>) =>
     collectedFeesToken0: new BigDecimal("1"),
     collectedFeesToken1: new BigDecimal("1"),
     collectedFeesUSD: new BigDecimal("1"),
+    donatedToken0: new BigDecimal("0"),
+    donatedToken1: new BigDecimal("0"),
+    donatedUSD: new BigDecimal("0"),
     totalValueLockedToken0: new BigDecimal("8.269406017330364631"),
     totalValueLockedToken1: new BigDecimal("8.269406017330364631"),
     totalValueLockedETH: new BigDecimal("16"),
@@ -283,7 +286,7 @@ describe("replayed Initialize and the Pool row", () => {
    * `if (!replayed)` and `swap-handler.ts` returns outright. Before the guard
    * this left the pool at liquidity 0 / txCount 0 permanently, with tick and
    * sqrtPrice rewound to the initialize values, feeding every position's
-   * `currentAmounts` and the fee sweep's in-range partition.
+   * `currentAmounts`.
    */
   it("does not zero a pool when a committed Initialize is re-delivered", async () => {
     const ix = createTestIndexer();

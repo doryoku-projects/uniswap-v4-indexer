@@ -5,19 +5,11 @@
  * the handlers and snapshot the resulting entity changes. See
  * .claude/skills/testing/SKILL.md for conventions.
  *
- * `eventsProcessed` ALSO MOVES WITH EFFECT CALLS. It went 12 -> 11 when the fee
- * sweep gained its `_gte` floor, and 11 -> 12 when `getFeeGrowthInside` stopped
- * being gated on `gateCanPass` (a mint now establishes its fee-growth baseline,
- * which is what stops a full close silently losing its collected fee). In both
- * cases the `changes` above were byte-identical — check that, since a real
- * dropped or duplicated event would show up there rather than in this counter.
- *
- * `eventsProcessed` COUNTS BLOCK-HANDLER ITEMS TOO. The fee sweep registers with
- * a `_gte` floor at the chain head as of process start (see
- * `src/handlers/feeSync-block.ts`), so no `feeSync` item is generated for a
- * historical block and this count is one lower than it was before that floor
- * existed. If you change the floor, expect this number to move — check that the
- * `changes` above it did NOT, since a real dropped event would show up there.
+ * `eventsProcessed` CAN MOVE WITHOUT ANY DATA CHANGE — it has shifted with
+ * effect calls and block-handler items before (the removed uncollected-fee sweep
+ * and its per-event `getFeeGrowthInside` read both moved it). If it changes,
+ * check that the `changes` above it did NOT, since a real dropped or duplicated
+ * event would show up there rather than in this counter.
  *
  * TIMEOUT: these fetch real chain data over the network, so vitest's 5s default
  * is not a meaningful budget for them — it measures the network, not the code.
@@ -58,13 +50,11 @@ describe("Uniswap V4 Indexer", { timeout: NETWORK_TIMEOUT_MS }, () => {
                   "createdAtTimestamp": 1768478831n,
                   "depositedToken0": "0",
                   "depositedToken1": "0",
-                  "feeGrowthInside0LastX128": 0n,
-                  "feeGrowthInside1LastX128": 0n,
-                  "feesUpdatedAtBlock": 0n,
-                  "feesUpdatedAtTimestamp": 0n,
                   "id": "1_133850",
                   "isActive": false,
                   "isPriceable": true,
+                  "lastModifyBlock": 0n,
+                  "lastModifyLogIndex": 0n,
                   "liquidity": 0n,
                   "origin": "0x16a4eC779ec71F9019fF79CbdD082a078C9eA06A",
                   "owner": "0x16a4eC779ec71F9019fF79CbdD082a078C9eA06A",
@@ -74,8 +64,6 @@ describe("Uniswap V4 Indexer", { timeout: NETWORK_TIMEOUT_MS }, () => {
                   "tokenId": 133850n,
                   "totalFeesCollected0": "0",
                   "totalFeesCollected1": "0",
-                  "totalFeesUncollected0": "0",
-                  "totalFeesUncollected1": "0",
                   "totalGasCostETH": "0",
                   "updatedAtBlock": 24240005n,
                   "updatedAtTimestamp": 1768478831n,
@@ -102,7 +90,7 @@ describe("Uniswap V4 Indexer", { timeout: NETWORK_TIMEOUT_MS }, () => {
             },
             "block": 24240005,
             "chainId": 1,
-            "eventsProcessed": 12,
+            "eventsProcessed": 11,
           },
         ],
       }

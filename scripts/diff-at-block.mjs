@@ -39,15 +39,9 @@
  *   USD columns                             NEITHER. The vanilla subgraph only
  *     accumulates USD volume for pairs on its tracked-volume whitelist, so it
  *     reports 0 for pools with real token volume. Reported as advisory.
- *   Uncollected fees                        NOT COMPARABLE against an external
- *     reference — neither the subgraph nor Ponder holds them at our block — but
- *     GATED INTERNALLY, against our own data. The sweep is the ONLY writer of
- *     both `totalFeesUncollected*` and `feesUpdatedAtBlock`, so one cannot exist
- *     without the other: a readable NON-ZERO uncollected figure on a position
- *     whose readable `feesUpdatedAtBlock` is 0 is a self-contradiction and FAILS
- *     (exit 1). A value that will not parse as a number is a MISSING
- *     MEASUREMENT, not a disagreement, and records a 2 — the same call the
- *     Ponder height gate makes for an unpositionable reference read.
+ *   Uncollected fees                        NOT STORED, NOT COMPARED. The indexer no
+ *     longer computes them (the sweep and its Position columns were removed);
+ *     the Tickwise backend reads them on chain.
  *
  * EXIT CODES — the same tri-state diff-collected-fees.mjs uses
  *
@@ -65,10 +59,8 @@
  * by a second pinned query rather than skipped. The subgraph joins are
  * value comparisons over the intersection: pools we hold that the subgraph
  * lacks at that block are skipped, positions absent upstream are a note, and
- * neither side is asked for rows the other never mentioned. Uncollected fees
- * are gated against our own sweep invariant, not against a reference, and a
- * position whose sweep fields cannot be READ is a 2, not a 1 — nothing was
- * measured there. `totalValueLockedToken0/1` are NOT COMPARED AT ALL against
+ * neither side is asked for rows the other never mentioned.
+ * `totalValueLockedToken0/1` are NOT COMPARED AT ALL against
  * this subgraph deployment (see `PRE20_FIELDS`); a 0 says nothing whatever
  * about them, which is why the skipped count prints on its own line above the
  * RESULT. Value comparisons carry a 1e-12 RELATIVE floor forced by Ponder's
@@ -507,8 +499,8 @@ for (const chain of CHAINS) {
           `query P($limit: Int!) {
              Position(where: {chainId: {_eq: "${chain}"}}, limit: $limit, order_by: {createdAtBlockNumber: desc}) {
                tokenId owner origin createdAtTimestamp createdAtBlockNumber poolId
-               totalFeesCollected0 totalFeesCollected1 totalFeesUncollected0 totalFeesUncollected1
-               feesUpdatedAtBlock depositedToken0 depositedToken1 withdrawnToken0 withdrawnToken1
+               totalFeesCollected0 totalFeesCollected1
+               depositedToken0 depositedToken1 withdrawnToken0 withdrawnToken1
                liquidity isActive totalGasCostETH updatedAtBlock
              } }`,
           { limit: POS_N },
@@ -520,132 +512,8 @@ for (const chain of CHAINS) {
   if (!posReason && minePos.length === 0) posReason = "no positions indexed yet on this chain";
   if (!posReason) console.log(`\n  POSITIONS sampled: ${minePos.length}`);
 
-  /*
-   * UNCOLLECTED FEES ARE GATED AGAINST OUR OWN DATA.
-   *
-   * This block used to compute `nonZeroUncollected`, print it, and gate NOTHING
-   * — and it printed the reassurance "as designed: head-gated, and this chain is
-   * mid-backfill" on the `swept === 0` branch, i.e. on EXACTLY the branch where
-   * a non-zero uncollected figure is impossible. A position carrying
-   * `totalFeesUncollected0 = 123456` with `feesUpdatedAtBlock = 0` printed the
-   * contradiction and the reassurance on adjacent lines and exited 0.
-   *
-   * The invariant is structural, not stylistic: the fee sweep is the ONLY writer
-   * of `totalFeesUncollected0/1` AND the only writer of `feesUpdatedAtBlock`
-   * (`modifyLiquidity-handler.ts` explicitly leaves `feesUpdatedAtBlock`
-   * untouched — "only the fee sweep owns it"). So the two are written together
-   * or not at all, and an uncollected balance with no sweep block behind it is a
-   * write nobody in the pipeline can produce. That is a defect in our data, and
-   * a defect is a 1.
-   *
-   * AN UNREADABLE VALUE IS NOT A DISAGREEMENT — IT IS A MISSING MEASUREMENT.
-   *
-   * This block previously ran the invariant on coerced values, so a position
-   * whose `feesUpdatedAtBlock` AND both uncollected legs were ALL unreadable
-   * satisfied `unswept` (`(null ?? 0) <= 0`) and `notProvenZero`
-   * (`null !== 0`), and got pushed as a problem worded "...while
-   * feesUpdatedAtBlock is 0". It was not 0. It was unreadable, and NOTHING was
-   * measured — the message described a state the run never found.
-   *
-   * That also took the opposite severity call from this file's own sibling at
-   * the Ponder height gate, where a Ponder row with no readable
-   * `updatedAtBlock` is `cannotCompare` (exit 2) on the stated rationale that a
-   * reference read we cannot position is a missing measurement, not a
-   * disagreement. The same rationale applies to our own rows: if a field the
-   * invariant needs cannot be read, the invariant was not evaluated, so it is a 2.
-   *
-   * With one carve-out, because "not evaluated" has to mean actually not
-   * evaluated. A readable zero `feesUpdatedAtBlock` plus a readable non-zero
-   * figure in EITHER leg already violates the invariant on its own, so an
-   * unreadable OTHER leg cannot un-prove it. Those rows stay a FAIL. Demanding
-   * all three legs first would turn a proven contradiction into a 2 over a value
-   * the proof never reads — and a half-written sweep row is exactly the shape
-   * this check exists to catch.
-   *
-   * A GENUINELY non-zero uncollected figure against a GENUINELY zero
-   * `feesUpdatedAtBlock` is untouched by this and still FAILS (exit 1). That
-   * self-contradiction is real: the sweep is the only writer of both.
-   */
   if (posReason) {
     console.log(`\n  POSITIONS: NOT COMPARED — ${posReason}`);
-  } else {
-    /*
-     * A PROVEN contradiction outranks an unreadable neighbour. The invariant is
-     * "the sweep is the only writer of both", so it is already violated once we
-     * can read a zero `feesUpdatedAtBlock` AND a non-zero figure in EITHER leg —
-     * whatever the other leg says cannot rescue it. Requiring all three legs to
-     * parse before evaluating would downgrade a fully-proven FAIL to a 2 because
-     * of a third value the proof never touches, which is the most realistic
-     * shape of the defect this check exists to catch (a half-written sweep row).
-     */
-    const provenUnswept = (p) => {
-      const b = numOrNull(p.feesUpdatedAtBlock);
-      return b !== null && b <= 0;
-    };
-    const provenNonZero = (p) =>
-      [p.totalFeesUncollected0, p.totalFeesUncollected1].some((v) => {
-        const n = numOrNull(v);
-        return n !== null && n !== 0;
-      });
-    const contradictory = minePos.filter((p) => provenUnswept(p) && provenNonZero(p));
-    const proven = new Set(contradictory);
-
-    // Everything not already proven needs all three legs readable to be judged.
-    const readable = (p) =>
-      numOrNull(p.feesUpdatedAtBlock) !== null &&
-      numOrNull(p.totalFeesUncollected0) !== null &&
-      numOrNull(p.totalFeesUncollected1) !== null;
-
-    const unreadable = minePos.filter((p) => !proven.has(p) && !readable(p));
-    const measurable = minePos.filter((p) => proven.has(p) || readable(p));
-
-    const unswept = (p) => provenUnswept(p);
-    const nonZero = (p) => provenNonZero(p);
-
-    const swept = measurable.filter((p) => !unswept(p)).length;
-    const nonZeroUncollected = measurable.filter(nonZero).length;
-
-    console.log(
-      `    uncollected-fee sweep: ${swept} swept, ${nonZeroUncollected} with non-zero uncollected` +
-        `${unreadable.length ? `, ${unreadable.length} NOT MEASURABLE (unreadable field)` : ""}`,
-    );
-    if (unreadable.length) {
-      for (const p of unreadable.slice(0, 8)) {
-        console.log(
-          `      ?? tokenId=${p.tokenId} NOT MEASURABLE — uncollected0=${JSON.stringify(p.totalFeesUncollected0)} ` +
-            `uncollected1=${JSON.stringify(p.totalFeesUncollected1)} ` +
-            `feesUpdatedAtBlock=${JSON.stringify(p.feesUpdatedAtBlock)}`,
-        );
-      }
-      if (unreadable.length > 8) console.log(`      ... and ${unreadable.length - 8} more`);
-      cannotCompare(
-        "uncollected fees",
-        `${unreadable.length} of ${minePos.length} position(s) returned an unreadable ` +
-          `feesUpdatedAtBlock or totalFeesUncollected0/1, so the sweep invariant could not be evaluated on them`,
-      );
-    }
-    if (contradictory.length) {
-      for (const p of contradictory.slice(0, 8)) {
-        console.log(
-          `      !! tokenId=${p.tokenId} uncollected0=${p.totalFeesUncollected0} ` +
-            `uncollected1=${p.totalFeesUncollected1} feesUpdatedAtBlock=${p.feesUpdatedAtBlock}`,
-        );
-      }
-      if (contradictory.length > 8) console.log(`      ... and ${contradictory.length - 8} more`);
-      out.problems.push(
-        `uncollected fees: ${contradictory.length} position(s) carry a readable NON-ZERO ` +
-          `totalFeesUncollected while a readable feesUpdatedAtBlock is 0 — the sweep is the only writer ` +
-          `of both, so neither can exist without the other`,
-      );
-    } else if (measurable.length === 0 && minePos.length > 0) {
-      // Nothing measurable at all: the `swept 0, non-zero 0` line above would
-      // otherwise read as a clean bill of health for an unmeasured set.
-      console.log(`      -> nothing measurable on this chain`);
-    } else if (swept === 0 && nonZeroUncollected === 0) {
-      // Printed ONLY when it is true: nothing swept AND nothing to explain.
-      console.log(`      -> as designed: head-gated, and this chain is mid-backfill`);
-    }
-    if (swept > 0) out.notes.push(`${swept} positions have been swept — the head gate has opened on this chain`);
   }
 
   if (posReason) cannotCompare("position identity", posReason);

@@ -225,6 +225,150 @@ describe("framesFromTrace — ordinals in execution order", () => {
   });
 });
 
+describe("framesFromTrace — a REVERTED subtree contributes no frames", () => {
+  /*
+   * callTracer marks a reverted frame with `error`, and a revert discards every
+   * log of that frame and of its whole subtree. Those calls therefore have no
+   * surviving ModifyLiquidity LOG, so they must have no FRAME either — otherwise
+   * each one takes an ordinal no event will ever claim and every later same-salt
+   * event pairs with its predecessor's frame. The old walk kept them.
+   */
+  const FEE0 = 262354965774593714n;
+  const FEE1 = 6708203n;
+  type Node = NonNullable<Parameters<typeof framesFromTrace>[0]>;
+  const reverted = (calls: Node[]): Node => ({
+    to: ROUTER,
+    input: "0xbadc0de0",
+    error: "execution reverted",
+    calls,
+  });
+
+  /** A settlement `[0, -]` with a failed attempt between the two real calls. */
+  const withRevert: Node & { calls: Node[] } = {
+    to: ROUTER,
+    input: "0xdeadbeef",
+    calls: [
+      frameNode({ tokenId: 137n, liquidityDelta: 0n, fee0: FEE0, fee1: FEE1 }),
+      // A router try/catch: the attempt reverted, and so did everything in it —
+      // including a nested call two levels down.
+      reverted([
+        frameNode({ tokenId: 137n, liquidityDelta: 0n, fee0: 999n, fee1: 999n }),
+        { to: ROUTER, input: "0xcafe", calls: [frameNode({ tokenId: 137n, liquidityDelta: -5_000n, fee0: 0n, fee1: 0n })] },
+      ]),
+      frameNode({ tokenId: 137n, liquidityDelta: -5_000n, fee0: 0n, fee1: 0n }),
+    ],
+  };
+  const withoutRevert: Node = {
+    to: ROUTER,
+    input: "0xdeadbeef",
+    calls: [withRevert.calls[0]!, withRevert.calls[2]!],
+  };
+
+  it("yields exactly the frames — and ordinals — of the same trace with the reverted call removed", () => {
+    const frames = framesFromTrace(withRevert, POOL_MANAGER);
+    expect(frames).toEqual(framesFromTrace(withoutRevert, POOL_MANAGER));
+    expect(frames.map((f) => [f.salt, f.ordinal, f.liquidityDelta, f.amount0])).toEqual([
+      ["137", 0, 0n, FEE0],
+      ["137", 1, -5_000n, 0n],
+    ]);
+  });
+
+  it("pairs the surviving events with their own frames, and the fee is conserved", () => {
+    // Only the two surviving calls emitted logs.
+    const frames = framesFromTrace(withRevert, POOL_MANAGER);
+    const got = replayTransaction(frames, [
+      { tokenId: 137n, logIndex: 4, liquidityDelta: 0n },
+      { tokenId: 137n, logIndex: 9, liquidityDelta: -5_000n },
+    ]);
+    expect(got).toEqual([
+      { logIndex: 4, ordinal: 0, status: "matched", fee0: FEE0, fee1: FEE1 },
+      { logIndex: 9, ordinal: 1, status: "matched", fee0: 0n, fee1: 0n },
+    ]);
+    expectConserved(frames, got, 137n);
+  });
+
+  it("the defect, shown: on a [0, 0] pair a kept phantom frame MISATTRIBUTES, and the check cannot see it", () => {
+    /*
+     * Why skipping matters beyond tidiness. Two surviving zero-delta calls with
+     * a reverted zero-delta attempt between them: the integrity check compares
+     * ticks and delta, which are identical across all three, so a phantom frame
+     * at ordinal 1 would be "matched" by the second event — attributing the
+     * reverted attempt's 999 instead of the real (0, 0). Reproduced with the
+     * `error` flag stripped, which is what the old walk effectively did.
+     */
+    const trace: Node & { calls: Node[] } = {
+      to: ROUTER,
+      input: "0xdeadbeef",
+      calls: [
+        frameNode({ tokenId: 7842n, liquidityDelta: 0n, fee0: FEE0, fee1: FEE1 }),
+        reverted([frameNode({ tokenId: 7842n, liquidityDelta: 0n, fee0: 999n, fee1: 999n })]),
+        frameNode({ tokenId: 7842n, liquidityDelta: 0n, fee0: 0n, fee1: 0n }),
+      ],
+    };
+    const events = [
+      { tokenId: 7842n, logIndex: 2, liquidityDelta: 0n },
+      { tokenId: 7842n, logIndex: 3, liquidityDelta: 0n },
+    ];
+
+    const fixed = replayTransaction(framesFromTrace(trace, POOL_MANAGER), events);
+    expect(fixed.map((a) => [a.status, a.fee0])).toEqual([
+      ["matched", FEE0],
+      ["matched", 0n],
+    ]);
+
+    const { error: _dropped, ...unflagged } = trace.calls[1]!;
+    const asBefore: Node = { ...trace, calls: [trace.calls[0]!, unflagged, trace.calls[2]!] };
+    const old = replayTransaction(framesFromTrace(asBefore, POOL_MANAGER), events);
+    expect(old.map((a) => [a.status, a.fee0])).toEqual([
+      ["matched", FEE0],
+      ["matched", 999n], // a fee that was never paid
+    ]);
+  });
+
+  it("drops a PoolManager modifyLiquidity frame that itself reverted", () => {
+    const self = {
+      ...frameNode({ tokenId: 9n, liquidityDelta: 0n, fee0: 5n, fee1: 5n }),
+      error: "execution reverted",
+    };
+    const trace = { to: ROUTER, input: "0xdeadbeef", calls: [self, frameNode({ tokenId: 9n, liquidityDelta: 0n, fee0: 1n, fee1: 2n })] };
+    const frames = framesFromTrace(trace, POOL_MANAGER);
+    expect(frames.map((f) => [f.ordinal, f.amount0])).toEqual([[0, 1n]]);
+  });
+
+  it("keeps the frames of a parent that CAUGHT its child's revert", () => {
+    // Only the reverted child's subtree is discarded; the catching parent and
+    // its later calls survive, and so do their logs.
+    const trace = {
+      to: ROUTER,
+      input: "0xdeadbeef",
+      calls: [
+        {
+          to: ROUTER,
+          input: "0xcafe",
+          calls: [
+            reverted([frameNode({ tokenId: 9n, liquidityDelta: 0n, fee0: 5n, fee1: 5n })]),
+            frameNode({ tokenId: 9n, liquidityDelta: 0n, fee0: 1n, fee1: 2n }),
+          ],
+        },
+      ],
+    };
+    expect(framesFromTrace(trace, POOL_MANAGER).map((f) => [f.ordinal, f.amount0])).toEqual([[0, 1n]]);
+  });
+
+  it("a reverted TOP-LEVEL call has no frames at all", () => {
+    expect(framesFromTrace({ ...withoutRevert, error: "execution reverted" }, POOL_MANAGER)).toEqual([]);
+  });
+
+  it("still keeps frames from ANY caller — the event-side ordinal counts any sender", () => {
+    // `saltOrdinal` counts same-salt rows of every sender, so dropping a
+    // non-PositionManager caller's frame here would misalign the two sides.
+    // Only reverted subtrees are dropped.
+    const direct = { ...frameNode({ tokenId: 7n, liquidityDelta: 0n, fee0: 3n, fee1: 0n }), from: "0x000000000000000000000000000000000000dEaD" };
+    const trace = { to: ROUTER, input: "0xdeadbeef", calls: [direct, frameNode({ tokenId: 7n, liquidityDelta: -1n, fee0: 0n, fee1: 0n })] };
+    expect(framesFromTrace(trace, POOL_MANAGER).map((f) => f.ordinal)).toEqual([0, 1]);
+  });
+});
+
 describe("the settlement shapes measured in the Avalanche population", () => {
   const FEE0 = 262354965774593714n;
   const FEE1 = 6708203n;
@@ -556,9 +700,8 @@ describe("traceGateCanPass — what still must NOT be traced", () => {
      *
      * Pure collects are 69.9% of fee-bearing settlements — the same share that
      * made the old `liquidityDelta < 0n` trace gate cover barely a third of the
-     * Avalanche damage. And a row clamped to 0 drops out of the fee sweep's
-     * candidate filter, so nothing re-reads it from chain: the loss is permanent
-     * against an append-only `totalFeesCollected`.
+     * Avalanche damage. And nothing re-reads a clamped row from chain, so the
+     * loss is permanent against an append-only `totalFeesCollected`.
      *
      * A zero-liquidity position can genuinely still hold uncollected fees, so
      * this traces on its own merits rather than merely defensively.

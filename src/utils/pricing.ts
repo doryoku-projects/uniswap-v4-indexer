@@ -1,6 +1,6 @@
 import { BigDecimal, type EvmOnEventContext, type Pool, type Token } from "envio";
 
-import { exponentToBigDecimal, safeDiv } from "../utils/index";
+import { ratioToBigDecimal, safeDiv } from "../utils/index";
 
 type handlerContext = EvmOnEventContext;
 import { ADDRESS_ZERO, ONE_BD, ZERO_BD, ZERO_BI } from "./constants";
@@ -8,6 +8,26 @@ import { NativeTokenDetails } from "./nativeTokenDetails";
 
 const Q192 = BigInt(2) ** BigInt(192);
 
+/**
+ * [token0Price, token1Price] from a pool's sqrtPriceX96, decimals applied:
+ *   token1Price = sqrtP² · 10^dec0 / (2^192 · 10^dec1)   (token1 per token0)
+ *   token0Price = 2^192 · 10^dec1 / (sqrtP² · 10^dec0)   (token0 per token1)
+ *
+ * Each is the EXACT rational rounded once to 40 significant digits by
+ * `ratioToBigDecimal`, and token0Price is computed from the rational
+ * INDEPENDENTLY rather than as 1 / (rounded token1Price).
+ *
+ * The previous body did `num.div(denom)` — rounded to 20 decimal places BEFORE
+ * the decimals were applied — then `safeDiv(1, price1)`, another 20-dp
+ * rounding. Whenever sqrtP²/2^192 was tiny (a cheap token0, and/or token0 with
+ * far more decimals than token1: 18 vs 6, 27 vs 6) most digits were gone, and
+ * below 1e-20 the price was exactly 0 — on BOTH sides, since 1/0 is 0. Likewise
+ * any token0Price under 1e-20 (an extremely cheap token1) became 0. These prices
+ * drive findNativePerToken -> derivedETH -> every USD figure, plus the Pool and
+ * Pool{Day,Hour}Data price / OHLC columns, so the zeros propagated everywhere.
+ *
+ * sqrtPriceX96 == 0 gives [0, 0], as before.
+ */
 export function sqrtPriceX96ToTokenPrices(
   sqrtPriceX96: bigint,
   token0: Token,
@@ -19,14 +39,12 @@ export function sqrtPriceX96ToTokenPrices(
   const token1Decimals =
     token1.id == ADDRESS_ZERO ? nativeTokenDetails.decimals : token1.decimals;
 
-  const num = new BigDecimal((sqrtPriceX96 * sqrtPriceX96).toString());
-  const denom = new BigDecimal(Q192.toString());
-  const price1 = num
-    .div(denom)
-    .times(exponentToBigDecimal(token0Decimals))
-    .div(exponentToBigDecimal(token1Decimals));
+  if (sqrtPriceX96 == ZERO_BI) return [ZERO_BD, ZERO_BD];
 
-  const price0 = safeDiv(new BigDecimal("1"), price1);
+  const num = sqrtPriceX96 * sqrtPriceX96 * BigInt(10) ** token0Decimals;
+  const denom = Q192 * BigInt(10) ** token1Decimals;
+  const price1 = ratioToBigDecimal(num, denom);
+  const price0 = ratioToBigDecimal(denom, num);
   return [price0, price1];
 }
 

@@ -45,10 +45,10 @@ indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event
    * this handler just zeroed. `tick`, `sqrtPrice` and `liquidity` do recover —
    * `swap-handler.ts` ASSIGNS all three from event params, so the first Swap
    * after the replay window heals them, and until it arrives the rewound values
-   * feed `currentAmounts` for every position in the pool and the fee sweep's
-   * in-range partition. Permanently lost are the accumulated fields the same
-   * write leaves untouched: `txCount`, `volumeToken0/1`, `volumeUSD`, `feesUSD`,
-   * `collectedFees*`, `totalValueLocked*`, `liquidityProviderCount`.
+   * feed `currentAmounts` for every position in the pool. Permanently lost are
+   * the accumulated fields the same write leaves untouched: `txCount`,
+   * `volumeToken0/1`, `volumeUSD`, `feesUSD`, `collectedFees*`, `donated*`,
+   * `totalValueLocked*`, `liquidityProviderCount`.
    *
    * WHY THE POOL ROW IS THE MARKER. `Initialize` fires exactly once per pool on
    * chain, and this is the ONLY handler that creates a Pool row — the other two
@@ -304,6 +304,9 @@ indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event
     token0: token0Id,
     token1: token1Id,
     feeTier: BigInt(event.params.fee),
+    // v4 starts every pool at protocol fee 0 and emits nothing for it; the
+    // value arrives later through ProtocolFeeUpdated (protocolFee-handler.ts).
+    protocolFee: 0n,
     liquidity: 0n,
     sqrtPrice: event.params.sqrtPriceX96,
     token0Price: prices[0],
@@ -321,6 +324,9 @@ indexer.onEvent({ contract: "PoolManager", event: "Initialize" }, async ({ event
     collectedFeesToken0: new BigDecimal(0),
     collectedFeesToken1: new BigDecimal(0),
     collectedFeesUSD: new BigDecimal(0),
+    donatedToken0: new BigDecimal(0),
+    donatedToken1: new BigDecimal(0),
+    donatedUSD: new BigDecimal(0),
     totalValueLockedToken0: new BigDecimal(0),
     totalValueLockedToken1: new BigDecimal(0),
     totalValueLockedETH: new BigDecimal(0),

@@ -22,11 +22,15 @@
  *
  * WHAT IS NOT HERE
  *
- * Fee accounting. `totalFeesUncollected*` needs `getFeeGrowthInside`, and
- * `totalFeesCollected*` needs the `feesAccrued` return value of
+ * Fee accounting. `totalFeesCollected*` needs the `feesAccrued` return value of
  * `modifyLiquidity`, which appears in no log — v4 has no Collect event and
- * `ModifyLiquidity` carries no fee field. Both arrive later, through effects, and
- * both leave the fields at their previous value until then.
+ * `ModifyLiquidity` carries no fee field. It arrives later, through the trace
+ * effect, and leaves the fields at their previous value until then.
+ *
+ * Uncollected fees are not computed by this indexer at all; the Tickwise backend
+ * reads them on chain. The six columns the removed sweep used to carry
+ * (uncollected amounts, fee-growth baselines, fee watermarks) are no longer in
+ * the schema.
  */
 
 import { BigDecimal } from "envio";
@@ -136,19 +140,6 @@ export function currentAmounts(args: {
 }
 
 /**
- * Is a position in range, i.e. can it accrue new fees?
- *
- * Worth having as its own function: an out-of-range position's uncollected fees
- * are exactly zero, so the fee sweep can skip it entirely. Ponder knows this too
- * but cannot act on it before reading, because it needs `getSlot0` to learn the
- * tick. Here the tick is already known, which is what lets the sweep read only
- * the positions that can actually have changed.
- */
-export function isInRange(tickLower: bigint, tickUpper: bigint, poolTick: bigint): boolean {
-  return poolTick >= tickLower && poolTick < tickUpper;
-}
-
-/**
  * Is this pool's price at the edge of the representable domain?
  *
  * A port of Ponder's `isDegenerate` (core/math.ts), and it is a guard on the
@@ -215,23 +206,14 @@ export function newPosition(args: {
     withdrawnToken1: ZERO_BD,
     totalFeesCollected0: ZERO_BD,
     totalFeesCollected1: ZERO_BD,
-    totalFeesUncollected0: ZERO_BD,
-    totalFeesUncollected1: ZERO_BD,
 
     amount0: ZERO_BD,
     amount1: ZERO_BD,
-
-    feeGrowthInside0LastX128: 0n,
-    feeGrowthInside1LastX128: 0n,
 
     totalGasCostETH: ZERO_BD,
 
     updatedAtBlock: args.blockNumber,
     updatedAtTimestamp: args.timestamp,
-    // Zero, not the current block: no fee read has happened yet, and claiming
-    // otherwise would make the first sweep think this row was already current.
-    feesUpdatedAtBlock: 0n,
-    feesUpdatedAtTimestamp: 0n,
 
     // Zero, and it MUST be zero rather than the current block: this row has had
     // no ModifyLiquidity folded into it yet, so every replayed liquidity event

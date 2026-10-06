@@ -17,8 +17,9 @@ This indexer tracks all key events from Uniswap V4 `PoolManager` and `PositionMa
 
 - `Initialize` - pool creation with fee, tick spacing, and hooks
 - `Swap` - all swaps with amounts, price, liquidity, and transaction details
+- `ProtocolFeeUpdated` - the pool's protocol fee, which is carved out of each swap's fee (see the swap-fee note under "Five more defects")
 - `ModifyLiquidity` - liquidity additions and removals
-- `Donate` - donations to pools
+- `Donate` - donations to pools: the tokens are added to the pool's TVL and to `Pool.donatedToken0/1/USD`, and each call is kept as a `Donation` row (not a swap fee, see "Donations and hooks")
 - `Transfer` / `Approval` - ERC-6909 token transfers and approvals
 
 **Chains:**
@@ -227,10 +228,39 @@ unchanged and only the runtime differs.
 | Position identity, ticks, liquidity, cashflows | `src/handlers/modifyLiquidity-handler.ts`                        | zero RPC                                        |
 | Current pooled `amount0`/`amount1`             | `src/utils/positions.ts`                                         | zero RPC                                        |
 | DEPOSIT / WITHDRAW transaction rows            | `src/handlers/modifyLiquidity-handler.ts`                        | zero RPC                                        |
-| Uncollected fees                               | `src/handlers/feeSync-block.ts` + `src/effects/positionState.ts` | one multicall per 400-position chunk, HEAD ONLY |
-| Fee-growth baseline (NOT a trace gate)         | `src/utils/feeGate.ts` + `src/effects/positionState.ts`          | one cached `eth_call`, issued in the PRELOAD pass |
+| Uncollected fees                               | not computed here — the Tickwise backend reads them on chain     | —                                               |
 | Collected fees + COLLECT_FEES rows             | `src/effects/feesAccrued.ts` + `src/utils/feeFrames.ts`          | one `debug_traceTransaction` per TRANSACTION that settles a position which held liquidity, PREFETCHED in the preload pass (serial fallback on a miss, serial retry on a failed trace) |
 | Serving the backend                            | the backend's own converter (`backend/src/subgraph/hyperindex/`) | —                                               |
+
+### Uncollected fees are no longer computed here
+
+The periodic uncollected-fee sweep (`feeSync-block.ts`) and the per-event `getFeeGrowthInside`
+read that fed its baseline have been removed. The Tickwise backend measures uncollected fees on
+chain itself (`PositionFeeRefreshService`). The sweep was also an operational liability: every
+firing ran an unbounded `Position.getWhere` on the fee watermark (`_lte` a cutoff), which returns
+every row it has not stamped — closed positions included, since those were filtered out AFTER the query and so never
+stamped — and loads them all into memory. Envio's team identified that query as the cause of the
+hosted indexer's periodic restarts.
+
+What went with it: `src/handlers/feeSync-block.ts`, `src/utils/feeSweep.ts`,
+`src/utils/chainHead.ts`, `src/effects/positionState.ts` (both StateView effects), the
+uncollected-fee math in `src/utils/fees.ts`, the StateView/Multicall3 address table, and the
+index on the fee watermark. Nothing in the indexer calls StateView any more, and it no longer
+makes any RPC at the chain head.
+
+**The six `Position` columns the sweep carried are gone from the schema**: the uncollected-amount
+pair, the fee-growth-baseline pair and the fee-watermark pair. They were always zero once the sweep
+went, and nothing in this repo writes or reads them. Hasura rejects a whole query that selects a
+field the schema no longer has, so **a consumer must stop selecting them before it is pointed at a
+deployment of this schema** — the Tickwise backend included. (The entity shape and the fee figures
+both change, so this deployment is a full re-index regardless.) Two side effects of losing the
+sweep: `amount0`/`amount1` are now as of the position's last `ModifyLiquidity` rather than
+re-priced every 45 minutes — a consumer that needs the current figure derives it from the pool's
+current `tick`/`sqrtPrice` and the position's ticks and liquidity — and `liquidity`/`isActive` are
+no longer healed from chain.
+
+The history sections below still describe the sweep and the fee-growth read where they explain
+past defects; that code no longer exists.
 
 ### Three things that are load-bearing
 
@@ -239,16 +269,14 @@ none of this can exist. The field was always delivered and never read.
 
 **`amount0`/`amount1` need no `eth_call`.** They are pure math over
 `(ticks, pool.tick, liquidity, pool.sqrtPrice)`, and the tick comes from `Initialize`/`Swap` — in
-v4 only a swap moves it, so the event-tracked value equals on-chain slot0. Ponder spends a
-`getSlot0` per refresh cycle on this. It also means the in-range set is known for free, so the fee
-sweep reads only positions that can actually have accrued.
+v4 only a swap moves it, so the event-tracked value equals on-chain slot0. Ponder originally spent
+a `getSlot0` per refresh cycle on this.
 
-**`updatedAtBlock` and `feesUpdatedAtBlock` are separate on purpose.** Ponder has one column for
-both, and because the backend watches it as a change feed, every fee sweep there presents the whole
-active set as changed and triggers thousands of pointless refreshes. The fee sweep here writes only
-the fee watermark. A THIRD watermark, `lastModifyBlock`/`lastModifyLogIndex`, is written by
-`modifyLiquidity-handler` alone and says which liquidity event the row's running sums contain — see
-"Replaying a committed range" below for what it is for.
+**`updatedAtBlock` moves only on a real position change** — a `ModifyLiquidity` or a `Transfer`.
+The backend watches it as a change feed, so anything that stamped it on a mere refresh would
+present the whole active set as changed. A second watermark, `lastModifyBlock`/`lastModifyLogIndex`,
+is written by `modifyLiquidity-handler` alone and says which liquidity event the row's running
+sums contain — see "Replaying a committed range" below for what it is for.
 
 ### Choosing which chains run
 
@@ -260,8 +288,7 @@ and, where known, their real v4 PoolManager deploy block from the Ponder indexer
 rather than a list here, since any list here goes stale the first time someone enables a chain.
 
 The key is `chains:`, not `networks:` — envio v3 renamed it, and code that reads the file has to
-match. `activeChainIds` in `src/utils/chains.ts` looked for `networks:` at first and silently
-returned an empty set, which disabled the startup floor described below on every chain.
+match.
 
 This replaces the previous `config.ethereum.yaml` / `config.robinhood.yaml` files, which existed
 only to run one chain at a time and whose filenames drove a separate Postgres schema. One config
@@ -334,8 +361,8 @@ cannot start a full-history sweep.
 **The fee-growth multicall could never succeed.** The client was built without a `chain`,
 copying `tokenMetadata.ts`, and viem then throws `client chain not configured.
 multicallAddress is required.` at the top of the multicall action — before any RPC. Every
-uncollected-fee read returned the all-zero failure sentinel, so `totalFeesUncollected0/1`
-was served as a measured zero for every in-range position on every chain. The fix passes
+uncollected-fee read returned the all-zero failure sentinel, so the uncollected amounts
+were served as a measured zero for every in-range position on every chain. The fix passes
 `multicallAddress` explicitly rather than a viem chain object, because viem ships no chain
 definition for several chains this indexer configures (4663 among them) and resolving through
 `client.chain` would have fixed most chains and left those silently throwing.
@@ -352,7 +379,7 @@ heuristics that used to narrow this further had to be removed rather than tuned.
 returned `[]` under `cache: true`, freezing "no collected fee for this transaction" into the
 persisted cache permanently; the failure paths now opt out with `context.cache = false`, the
 idiom already in `tokenMetadata.ts`. And the sweep's `continue` on a failed read skipped the
-write that advances `feesUpdatedAtBlock`, so those rows stayed below the cutoff and were
+write that advances the fee watermark, so those rows stayed below the cutoff and were
 re-selected on every firing forever — the stale set could only grow. Ponder's per-position
 write is unconditional for this reason, and so is this one now.
 
@@ -476,16 +503,17 @@ it broke the invariant that the aggregate equals the sum of the position's own r
 **The sweep never wrote `liquidity` back.** Ponder writes the on-chain value every cycle
 (apps/v4/src/index.ts:452-459) so a missed or out-of-order event heals instead of drifting
 forever; the port used the on-chain value for the fee math and then discarded it. Now written,
-along with `isActive` and the close/reopen handling — but only for IN-RANGE positions, because
-those are the only ones this sweep reads. Ponder pays an RPC per active position to cover both;
-that trade is deliberate and is stated at the write site rather than left implicit.
+along with `isActive` and the close/reopen handling. It was at first limited to IN-RANGE
+positions, the only ones the sweep then read; that limit went away with the in-range partition
+(see "Five more defects" below), so every candidate heals — and a heal now moves `updatedAtBlock`.
 
 Smaller parity gaps closed at the same time: transaction gas is charged once per transaction
 rather than to every position it touches; negative running liquidity is clamped and warned
 rather than stored; `closedAtTimestamp` is stamped on the first close and preserved; the
 degenerate-pool guard (`isDegenerate`) zeroes amounts and clears `isPriceable` instead of
-publishing edge-of-domain artifacts; `feeGrowthInside0/1LastX128` are actually maintained;
-`feesUpdatedAtTimestamp` is a real clock rather than a copy of its own previous value; the
+publishing edge-of-domain artifacts; the fee-growth baseline columns are actually maintained;
+the fee watermark's timestamp is a real clock rather than a copy of its own previous value (both
+columns have since been removed); the
 stale-set query uses `_lte` so the real cadence matches the configured interval; and the
 sweep sorts by watermark, since `getWhere` has no ordering and the documented
 "oldest fee-read first" rotation was otherwise fiction.
@@ -534,20 +562,14 @@ case, and the multi-event window.
 Both gates on the ModifyLiquidity fee path live in **`src/utils/feeGate.ts`** and nowhere else.
 The handler calls them; it does not restate them.
 
-**`feeGate` — should this event read `getFeeGrowthInside`?** The read is issued from TWO call
-sites in `modifyLiquidity-handler.ts`: the `context.isPreload` block, and the real path where the
-result is used. `preloadBatchOrThrow` invokes every handler in a batch concurrently while
+**`feeGate` — is this event attributable to an NFT position?** It answers for both the
+`context.isPreload` block and the real path, so the two passes cannot disagree about which events
+are position events. `preloadBatchOrThrow` invokes every handler in a batch concurrently while
 `runBatchHandlersOrThrow` runs them one at a time, so a read left behind the preload `return` is
-a read taken at full RPC latency, in series, once per event — and this one fires on nearly every
-PositionManager `ModifyLiquidity`. Hoisting it lets the whole batch go out at once; the real
-path's identical call then resolves from the in-memory effect dict for free.
+a read taken at full latency, in series, once per event. (It used to also gate a per-event
+`getFeeGrowthInside` read for the uncollected-fee baseline; that read is gone.)
 
-Two call sites is also the hazard, which is why the predicate is extracted rather than copied.
-The memo is keyed on the effect INPUT, so if the two sites ever built even slightly different
-inputs the real pass would miss the dict and pay the round trip anyway — silently, with nothing
-failing. `feeGate` returns the constructed input, so there is one construction, not two.
-
-The same block also warms `Position.get`, `PositionTransaction.getWhere` and
+The preload block warms `Position.get`, `PositionTransaction.getWhere` and
 `ModifyLiquidity.getWhere` — one serialised SELECT each per event in the sequential pass, which
 collapse into grouped queries under preload (`UserContext.res.mjs:84,123`). `Position.get` is the
 one whose result is USED there: it gates the trace prefetch below. The last of the three
@@ -594,23 +616,10 @@ path, and success requires at least one frame. `getFeesAccrued`'s name, input, o
 
 **`getFeesAccrued`'s `rateLimit` is now the throughput ceiling — size it to the RPC plan.** Before
 the prefetch the serial loop never exceeded ~3.35 traces/s; now up to `calls` start per window per
-chain, and every chain's traces plus every `getFeeGrowthInside` batch MEMBER draw from the
-provider's limit. On an account-wide limit (Dwellir's Developer plan is 100 responses/s shared by
+chain, and every chain's traces draw from the provider's limit. On an account-wide limit (Dwellir's Developer plan is 100 responses/s shared by
 every chain and key, 500 burst, batch members counted individually) 20/s on four chains does not
 fit alongside the `eth_call` traffic. `rateLimit` is runtime-only — it is not part of the cache
 key or the table name — so lowering it is always safe.
-
-**`getFeeGrowthInside`'s rate limit is now load-bearing, and is 500/s.** With the read hoisted,
-the limiter — not RPC latency — is the ceiling on how wide a preload batch can go. `config.yaml`
-sets no `disable_default_cross_chain`, so `crossChain` defaults to true and the window is SHARED
-across every chain: the old 100/s was ~20/s each across the five uncommented chains. 500/s
-restores ~100/s per chain, and since `stateClient` uses `http(url, { batch: true })`, viem
-coalesces a preload pass's concurrent calls into a handful of JSON-RPC requests rather than 500.
-It is a ceiling, not a target, and `LoadLayer.executeWithRateLimit` queues the overflow into the
-next window rather than failing. **Do not "fix" the sharing with `crossChain: false`:** the effect
-cache table's NAME encodes the scope (`Internal.res.mjs:222-228`), so re-scoping points the effect
-at a different table and silently orphans every cached row. `rateLimit` is runtime-only and has no
-cache identity, which is why it is the safe knob.
 
 ### Collected fees were wrong for 1,167 Avalanche positions — TWO independent causes
 
@@ -644,8 +653,9 @@ BOTH same-salt events trace, so first-wins attributes the same fee TWICE. Keying
 two frames identical in salt + ticks + delta.
 
 **So the pairing is ORDINAL** (`src/utils/feeFrames.ts`). `framesFromTrace`
-(`src/effects/feesAccrued.ts`) stamps every `modifyLiquidity` frame with its 0-based index among
-frames of the same salt, in execution order; the handler derives the same ordinal for its own
+(`src/effects/feesAccrued.ts`) stamps every SURVIVING `modifyLiquidity` frame — reverted subtrees
+are skipped, see "Five more defects" below — with its 0-based index among frames of the same salt,
+in execution order; the handler derives the same ordinal for its own
 event and pairs on it. This is sound because the k-th same-salt LOG is the k-th same-salt call
 FRAME — verified on all 2,062 settlement transactions, matching on
 `(tickLower, tickUpper, liquidityDelta, salt)`, **2062/2062, zero exceptions**.
@@ -729,6 +739,161 @@ fix working. `scripts/diff-collected-fees.mjs` should be read with that in mind:
 reporting MORE collected fees than Ponder is the classifier's existing "Ponder LOW" case and
 remains correct.
 
+### Five more defects, found by checking BOTH indexers against chain math
+
+Comparing against Ponder could not catch these: its Envio-parity port reproduced the same
+behaviour, so the two agreed on the wrong numbers. That port then fixed them first and verified the
+result against on-chain StateView math — uncollected fees 1,000/1,000 + 144/144 positions and
+collected fees 735/735 + 77/77 across Arbitrum, mainnet and Optimism windows — and this repo now
+carries the same semantics. Each produced a plausible number, not an error.
+
+The first three below describe the uncollected-fee sweep. It has since been removed, together with
+`calculateUncollectedFees` and `src/utils/feeSweep.ts`, so they are the record of what was wrong
+and describe code that is no longer in this repo. The last two (reverted frames, swap fees) are
+still live.
+
+**Uncollected fees: a clamp that zeroed the ordinary out-of-range reading.**
+`calculateUncollectedFees` (`src/utils/fees.ts`) clamped a negative `feeGrowthInside − last` to 0.
+The contract computes `FullMath.mulDiv(feeGrowthInside − feeGrowthInsideLast, liquidity, 2^128)`
+inside `unchecked`, so the subtraction wraps mod 2^256, and `feeGrowthInside` is itself composed
+with unchecked subtraction — out of range it routinely reads near 2^256. A difference that looks
+negative is an ordinary positive amount mod 2^256. The formula is now
+`toUint256(inside − last) × L / 2^128`, floor, no clamp, no cap, `L <= 0` → 0. Its caller contract
+is load-bearing: `last` MUST be the contract's checkpoint (`getPositionInfo`) read at the same
+block as `getFeeGrowthInside`. The fee-growth baseline the Position row used to carry, written by
+`modifyLiquidity-handler`, was a pool-level end-of-block read, NOT that checkpoint, and diffing
+against it mod 2^256 could invent a ~2^256 fee — the sweep never does.
+
+**The sweep zeroed every out-of-range position without reading it.** It partitioned candidates
+by `isInRange` and wrote 0/0 for the rest, on the claim that an out-of-range position has nothing
+to collect. Fees accrued while in range stay claimable after it leaves: mainnet tokenIds 10014 and
+100022 were out of range with claimable fees and served here as 0. The zeroed path also never
+refreshed their `amount0/1` or healed their liquidity. The sweep body now lives in
+`src/utils/feeSweep.ts` (testable with a mock context; the handler file cannot be imported by a
+test) and reads EVERY candidate with the same 400-row cap, the same one-multicall-per-400 chunking,
+the same failed-read handling (watermark only) and the same degenerate-pool amount guard. A firing
+processes the same number of rows as before — out-of-range rows were already stamped — and the
+widest multicall is unchanged (400 positions was always possible); only the share of rows that
+costs a read grew. The log line reports `out-of-range=` (rows read while out of range) and
+`healed=` in place of `zeroed-out-of-range=`.
+
+**The sweep healed rows without telling the change feed.** It corrected `liquidity`/`isActive`
+from chain but never moved `updatedAtBlock`, so the backend kept serving the stale liquidity until
+an unrelated event touched the row. A heal now sets `updatedAtBlock` to the sweep block and
+`updatedAtTimestamp` to the sweep's wall clock (a block handler has no block timestamp). A plain
+fee or price refresh still does not move it, which is the reason the two watermarks exist.
+
+**Reverted call frames shifted the collected-fee ordinals.** `collectModifyCalls` kept
+`modifyLiquidity` frames from reverted calls. A revert discards every log of that frame and its
+whole subtree, so none of them has a surviving `ModifyLiquidity` event to pair with; keeping them
+gave each a phantom ordinal, so the next same-salt event paired with the phantom (the reverted
+attempt's fees) and every later one with its predecessor's frame — undetectable by the tick/delta
+integrity check when the neighbouring frames agree on ticks and delta, as a `[0, 0]` pair does. A frame with `error` now drops
+its whole subtree. Frames from ANY caller are still kept, because `saltOrdinal` counts same-salt
+rows of any sender (Ponder keeps PositionManager frames only because its event-side ordinal counts
+PositionManager events only — the populations must match, not the filter). **Cache caveat:**
+`getFeesAccrued` rows persisted before this change still parse and still carry any phantom frames,
+so a resync that must be exact should first purge, from
+`envio_<chainId>_effect_getFeesAccrued`, the rows of transactions that contain a reverted
+`modifyLiquidity` frame. The committed `.envio/cache` TSVs were empty when this changed.
+
+**Swap fees were priced at the previous swap's fee, and then at a fee that included the protocol's
+cut.** `swap-handler.ts` computed `feesETH`, `feesUSD`, `feesUSDUntracked`, `collectedFeesToken0/1`
+and the HookStats fee from the STORED `pool.feeTier`, and only then overwrote it with
+`event.params.fee`. On a dynamic-fee pool every swap was charged its predecessor's rate, and the
+FIRST swap was charged the Initialize value — the `0x800000` dynamic-fee flag, ~8.39x the volume.
+Pricing at the event's fee fixed that, but the event's `fee` is not the LP fee: v4-core builds it
+as `p + l - floor(p·l / 1e6)` for protocol fee `p` and LP fee `l`, and takes the protocol's share
+off the gross input first, so the LPs earn `grossInput × (swapFee − p) / 1e6`. A pool with a
+protocol fee set therefore had the protocol's cut booked as LP income (ETH/USDC 0.05% emits 625,
+not 500).
+
+- **`Pool.feeTier` is the PoolKey fee set at Initialize and is never rewritten.** A dynamic-fee
+  pool keeps `8388608` (`0x800000`), which is how a consumer tells it is dynamic; a static pool
+  keeps its tier. It used to be overwritten with each swap's event fee, so a dynamic pool looked
+  static and a static pool with a protocol fee showed an inflated tier (625, 3499).
+- **`Swap.fee` is the raw combined event fee** and the only place the per-swap rate of a
+  dynamic-fee pool is kept.
+- **`Pool.protocolFee`** (new, `BigInt!`) is the packed uint24 `ProtocolFeeUpdated` sets
+  (`src/handlers/protocolFee-handler.ts`): the LOW 12 bits are the zeroForOne protocol fee, the HIGH
+  12 bits the oneForZero one, each in hundredths of a bip (at most 1000). It is 0 at Initialize —
+  v4 emits nothing for a pool's initial 0, so Initialize plus this event is a complete record.
+- **The LP fee rate of a swap is `max(0, event.fee − p)`**, with `p` the half of `Pool.protocolFee`
+  for the swap's direction (`src/utils/fees.ts`). The direction comes from the event amounts, which
+  v4 reports from the SWAPPER's side: `amount0 < 0` is zeroForOne (the opposite of the sign the
+  handler books on the `Swap` entity). That rate prices every fee figure — pool, token,
+  PoolManager, HookStats and the day/hour aggregates. With `protocolFee` 0 it is the event fee
+  unchanged.
+- `Pool.protocolFee` is on the Hasura surface only; like `Token.decimalsResolved` it is not in
+  `src/graph-api/schema-map.ts`.
+
+Checked on chain on 2026-10-06 (mainnet, StateView `getSlot0` and `getFeeGrowthGlobals`): ETH/USDC
+0.05% has `protocolFee` 125/125 and `lpFee` 500, and emits 625; ETH/USDC 0.3% has 500/500 and 3000,
+and emits 3499 (so the LPs' rate is 2999, not 3000 — the protocol's cut comes off first). On
+blocks holding a single swap, the `feeGrowthGlobal` delta × liquidity / 2^128 matched
+`gross × (fee − p) / 1e6` to within 1 unit of rounding, and was 20% (0.05% pool) and 14% (0.3%
+pool) below `gross × fee / 1e6`. A raw `amount0 < 0` coincided with a falling price on all 225
+consecutive swap pairs checked across five pools, static and dynamic.
+No dynamic-fee pool on chains 1, 42161 or 43114 (the 25 highest-volume on each) has a protocol fee
+set, so the dynamic case is only observed with `p = 0` — there the event fee is used as is and also
+matched — and the dynamic pool with `p > 0` is covered by `src/swapFee.test.ts` alone.
+
+Still wrong, and unchanged by this: `collectedFeesToken0/1` charge the LP rate against BOTH tokens'
+absolute swap amounts, though v4 takes the fee on the input token only.
+
+All of this moves every fee-derived pool, token, PoolManager, HookStats and day/hour aggregate on
+dynamic-fee pools and on every pool with a protocol fee set, so it needs a resync to take effect
+on historical data.
+
+Tested in `src/feeFramePairing.test.ts` (reverted subtrees yield the frames and ordinals of the
+same trace without them), `src/swapFee.test.ts` (stored 3000 / event 500 is priced at 500, a
+dynamic pool's first swap is not priced at the flag, `feeTier` is never rewritten, and the
+protocol-fee split in both directions, through the real handlers) and `src/protocolFee.test.ts`
+(the packed-fee decoding and the LP-rate arithmetic).
+
+### Donations and hooks: what the pool figures include
+
+**Donations.** `PoolManager.donate` moves tokens from the caller into the pool and credits them to
+the in-range LPs as fee growth, so a pool whose own LP fee is 0% can still pay its LPs (hooks and
+routers use it). The event was subscribed to and dropped, which left those tokens out of TVL and
+gave a 0% pool no trace of where its LPs' income came from. `src/handlers/donate-handler.ts` now:
+
+- adds the amounts to `totalValueLocked*` on the pool, both tokens, the PoolManager and HookStats;
+- adds them to the pool's own `donatedToken0`, `donatedToken1` and `donatedUSD` (priced at the
+  tokens' stored `derivedETH`, as `ModifyLiquidity` prices its amounts);
+- writes a `Donation` row, keyed `<chainId>_<blockNumber>_<logIndex>`. The row is also the replay
+  guard: TVL and the donated totals are running sums, so a re-delivered `Donate` finds its row and is
+  skipped, the same role `Swap` plays for the swap handler.
+
+It deliberately does **not** touch `feesUSD`, `collectedFees*` or any day/hour `feesUSD`: those are
+swap fees priced at the swap's LP fee rate, and folding a donation into them would put a "fee" on a
+0% pool again. A consumer that wants LP income rather than swap fees adds `donatedUSD` itself. It
+also does not bump `txCount` or write day/hour rows, because a hook usually donates inside the
+transaction of the swap it is taxing; the TVL snapshot on those rows is refreshed by the pool's next
+swap or liquidity change.
+
+**Hooks.** The v4 `Swap` event is emitted with the pool's own delta, before `afterSwap` runs (the
+comment in v4-core `PoolManager._swap` says so), and `ModifyLiquidity` carries the liquidity delta,
+not the caller's settled delta. So for a hook with a `*_RETURNS_DELTA` permission, the pool's TVL,
+volume and LP fees summed from those events are what moved through its liquidity and are **not**
+distorted by the hook. What is missing is what the hook itself took: that cut is in no PoolManager
+event, so the hook's own fee is in no figure here, and a position's deposited, withdrawn and
+collected amounts can exceed what its owner actually paid or received. The Tickwise backend flags
+such pools (`customAccounting`, decoded from the low 14 bits of the hook address).
+
+**Known gap: fees collected on `ModifyLiquidity` are not taken out of TVL.** Pool and token TVL are
+sums of swap amounts (which include the LP fee) and liquidity-change principal. When an LP collects
+fees, v4 pays them out of the pool, but no event carries the amount and the exact figure arrives
+only through the `feesAccrued` trace for PositionManager positions (see the next sections). Nothing
+subtracts it, so TVL drifts upward with cumulative collected fees on busy pools. The Uniswap v4
+subgraph this indexer mirrors has the same property. It is not fixed here because the figure is only
+known after the pool, token and interval writes of the handler, and only for PositionManager
+callers; fixing it means restructuring that replay-guarded block.
+
+Tested in `src/donate.test.ts` (a donation to a 0% pool raises TVL and `donated*` and books no fees
+or `txCount`, donations accumulate, a re-delivered `Donate` is applied once, an uninitialized pool
+creates nothing).
+
 ### Validating against Ponder and the subgraph
 
 Ponder is the tested reference, so the cutover gate is agreement with it, not passing tests.
@@ -765,13 +930,8 @@ difference is a defect rather than a height artifact. Ponder has no equivalent, 
 comparisons stay gated on its own `updatedAtBlock` being at or below that block. It covers
 four dimensions: pool identity/price/cumulative units and position identity against the
 subgraph, and collected fees, cashflows and the transaction ledger against Ponder.
-Uncollected fees have no external reference — neither the subgraph nor Ponder holds them at
-our block — so they are checked against our OWN data instead. The sweep is the only writer of
-both `totalFeesUncollected*` and `feesUpdatedAtBlock`, so a readable non-zero uncollected figure
-against a readable zero sweep block is a self-contradiction and FAILS. A value that will not
-parse as a number is _not measured_ (exit 2), not a disagreement — unless the contradiction is
-already proven by the two legs that DO parse, in which case the unreadable third leg cannot
-un-prove it and it still fails.
+Uncollected fees are not compared at all: neither the subgraph nor Ponder holds them at our
+block, and this indexer no longer stores them.
 
 **`totalValueLockedToken0/1` are NOT COMPARED against the subgraph at all** — not tolerated, not
 advisory, not compared. The deployed subgraph is pre-#20 (upstream `05558b0`, 2025-02-11) and
@@ -816,8 +976,9 @@ intersection.
 
 **What a green run looks like today.** Chain 43114 passes. Chain 42161 still FAILS, and not on
 TVL: `txCount` and `volumeToken0/1` disagree on ~108 of 200 pools (ours strictly higher, never
-lower, up to 2.66%) plus one dynamic-fee pool's `feeTier` (we resolve 400, the subgraph keeps the
-`0x800000` sentinel). Those are pre-existing, unexplained, and deliberately still failing. Chain 1
+lower, up to 2.66%) plus one dynamic-fee pool's `feeTier` (we resolved 400 because each swap
+overwrote it; the subgraph keeps the `0x800000` sentinel, and `feeTier` is no longer overwritten
+here). Those are pre-existing, unexplained, and deliberately still failing. Chain 1
 is usually inconclusive — the Graph gateway is frequently `Unavailable` for it, and Ponder mainnet
 times out on the ledger for want of the SQL indexes in `sql/`. A full three-chain pass is not
 currently achievable and the script should not be expected to produce one.
@@ -883,4 +1044,4 @@ than the chain says, never more.
 you want exact collected fees for; there is no event-only alternative, because `feesAccrued` is a
 return value of `PoolManager.modifyLiquidity` and v4 has no Collect event. A chain whose RPC lacks
 it degrades to zero collected fees with a warning rather than halting. Endpoints resolve through
-`src/utils/rpc.ts`; contract addresses live in `src/utils/v4Addresses.ts`.
+`src/utils/rpc.ts`; the PositionManager table lives in `src/utils/v4Addresses.ts`.
