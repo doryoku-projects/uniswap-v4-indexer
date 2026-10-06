@@ -23,9 +23,11 @@ type Swap
   sqrtPriceX96: BigInt!
   tick: BigInt!
   logIndex: BigInt!
-  # Fee paid for this swap in hundredths of a bip (i.e. raw PoolManager Swap.fee).
-  # For dynamic-fee pools this captures the per-swap effective fee, which would
-  # otherwise be lost when pool.feeTier is overwritten by the next swap.
+  # The raw PoolManager Swap.fee, in hundredths of a bip: the COMBINED swap fee,
+  # LP fee plus protocol fee. For dynamic-fee pools this is the only place the
+  # per-swap effective fee is kept (Pool.feeTier stays the dynamic-fee flag).
+  # The LPs' share of the swap's input is this minus the protocol fee of the
+  # swap's direction (see Pool.protocolFee), and that is what the fee totals use.
   fee: BigInt!
 }
 
@@ -64,7 +66,16 @@ type Pool
   createdAtBlockNumber: BigInt!
   token0: String! @index # Instead of Token reference
   token1: String! @index # Instead of Token reference
+  # The PoolKey fee exactly as set at Initialize, and never rewritten. A
+  # dynamic-fee pool keeps the 0x800000 (8388608) flag here, which is not a rate;
+  # the rate an individual swap paid is on Swap.fee.
   feeTier: BigInt!
+  # PoolManager's packed uint24 protocol fee for this pool, set by
+  # ProtocolFeeUpdated and 0 until then. Low 12 bits apply to zeroForOne swaps,
+  # high 12 bits to oneForZero swaps, each in hundredths of a bip (max 1000).
+  # It is taken out of the swap fee, so the LP fee rate of a swap is
+  # Swap.fee minus the field for its direction.
+  protocolFee: BigInt!
   liquidity: BigInt!
   sqrtPrice: BigInt!
   token0Price: BigDecimal!
@@ -82,6 +93,14 @@ type Pool
   collectedFeesToken0: BigDecimal!
   collectedFeesToken1: BigDecimal!
   collectedFeesUSD: BigDecimal!
+  # Tokens handed to this pool's in-range LPs through PoolManager.donate, summed
+  # over the pool's life (hooks and routers use it to pay out fees). Kept apart
+  # from feesUSD / collectedFees*, which are swap fees priced at the LP fee
+  # rate: a donation is not a fee on any swap, and a 0% pool can still have one.
+  # A donation does raise totalValueLocked*, because the tokens enter the pool.
+  donatedToken0: BigDecimal!
+  donatedToken1: BigDecimal!
+  donatedUSD: BigDecimal!
   totalValueLockedToken0: BigDecimal!
   totalValueLockedToken1: BigDecimal!
   totalValueLockedETH: BigDecimal!
@@ -198,10 +217,8 @@ type Position
   withdrawnToken1: BigDecimal!
   totalFeesCollected0: BigDecimal!
   totalFeesCollected1: BigDecimal!
-  # DEPRECATED, always 0. Uncollected fees are computed by the Tickwise backend
-  # on chain; the indexer's sweep was removed. Kept so existing queries resolve.
-  totalFeesUncollected0: BigDecimal!
-  totalFeesUncollected1: BigDecimal!
+  # Uncollected fees are not stored: the indexer's sweep was removed, and the
+  # Tickwise backend computes them on chain.
 
   # ─── Current in-pool amounts, human units ─────────────────────────────────
   # Pure math: getAmount0/1(ticks, pool.tick, liquidity, pool.sqrtPrice).
@@ -209,11 +226,6 @@ type Position
   # swap moves the tick — so this needs NO eth_call, unlike Ponder's getSlot0.
   amount0: BigDecimal!
   amount1: BigDecimal!
-
-  # DEPRECATED, always 0. Was the baseline for the removed uncollected-fee
-  # sweep. Never served — the backend has no consumer for it.
-  feeGrowthInside0LastX128: BigInt!
-  feeGrowthInside1LastX128: BigInt!
 
   totalGasCostETH: BigDecimal! # human, chain-native token
 
@@ -223,10 +235,6 @@ type Position
   # change feed and enqueues one refresh per row returned.
   updatedAtBlock: BigInt!
   updatedAtTimestamp: BigInt!
-  # DEPRECATED, always 0. Was the removed fee sweep's watermark; unindexed now
-  # that nothing queries it.
-  feesUpdatedAtBlock: BigInt!
-  feesUpdatedAtTimestamp: BigInt!
 
   # ─── Replay watermark: the LAST ModifyLiquidity folded into THIS row ───────
   # `(block, logIndex)` of the last ModifyLiquidity whose non-idempotent
@@ -358,6 +366,25 @@ type ModifyLiquidity
   tickLower: BigInt! # lower tick of the position
   tickUpper: BigInt! # upper tick of the position
   logIndex: BigInt! # index within the txn
+}
+
+# One PoolManager.donate call. Its presence is also the replay guard: the Pool,
+# Token and PoolManager TVL it adds are running sums, so a re-delivered Donate
+# must be recognised and skipped (see handlers/donate-handler.ts).
+type Donation
+  @storage(postgres: true)
+  @index(fields: ["pool", ["timestamp", "DESC"]]) {
+  id: ID! # <chainId>_<blockNumber>_<logIndex>, like Swap
+  chainId: BigInt!
+  transaction: String! # Instead of Transaction reference
+  timestamp: BigInt!
+  pool: String! # Instead of Pool reference
+  sender: String! # Instead of Bytes
+  origin: String! # Instead of Bytes
+  amount0: BigDecimal! # human units, always >= 0 (the donor pays the pool)
+  amount1: BigDecimal!
+  amountUSD: BigDecimal! # priced at the tokens' stored derivedETH, like ModifyLiquidity
+  logIndex: BigInt!
 }
 
 # Data accumulated and condensed into day stats for all of Uniswap, per chain

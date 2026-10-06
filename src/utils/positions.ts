@@ -28,9 +28,9 @@
  * effect, and leaves the fields at their previous value until then.
  *
  * Uncollected fees are not computed by this indexer at all; the Tickwise backend
- * reads them on chain. `totalFeesUncollected0/1`, `feeGrowthInside0/1LastX128`
- * and `feesUpdatedAtBlock/Timestamp` stay in the schema so existing queries keep
- * resolving, and are always zero.
+ * reads them on chain. The six columns the removed sweep used to carry
+ * (uncollected amounts, fee-growth baselines, fee watermarks) are no longer in
+ * the schema.
  */
 
 import { BigDecimal } from "envio";
@@ -206,22 +206,14 @@ export function newPosition(args: {
     withdrawnToken1: ZERO_BD,
     totalFeesCollected0: ZERO_BD,
     totalFeesCollected1: ZERO_BD,
-    // Always zero — see "WHAT IS NOT HERE" above.
-    totalFeesUncollected0: ZERO_BD,
-    totalFeesUncollected1: ZERO_BD,
 
     amount0: ZERO_BD,
     amount1: ZERO_BD,
-
-    feeGrowthInside0LastX128: 0n,
-    feeGrowthInside1LastX128: 0n,
 
     totalGasCostETH: ZERO_BD,
 
     updatedAtBlock: args.blockNumber,
     updatedAtTimestamp: args.timestamp,
-    feesUpdatedAtBlock: 0n,
-    feesUpdatedAtTimestamp: 0n,
 
     // Zero, and it MUST be zero rather than the current block: this row has had
     // no ModifyLiquidity folded into it yet, so every replayed liquidity event

@@ -22,9 +22,9 @@
  * handler.
  *
  * There used to be a third: a per-event `getFeeGrowthInside` read that fed the
- * `feeGrowthInside0/1LastX128` baseline for the uncollected-fee sweep. Both were
- * removed when uncollected fees moved to the Tickwise backend, which reads them
- * on chain itself.
+ * fee-growth baseline columns of the uncollected-fee sweep. Both it and the
+ * columns were removed when uncollected fees moved to the Tickwise backend,
+ * which reads them on chain itself.
  *
  * PRELOAD, AS ENVIO 3.7.0 ACTUALLY IMPLEMENTS IT
  *
